@@ -1,0 +1,97 @@
+/* General */
+"app.no_theme" = "Нет доступных тем";
+"button.apply" = "Применить";
+"button.cancel" = "Отмена";
+
+/* Personalization menu */
+"menu.theme" = "Тема";
+"menu.bar_size" = "Размер панели";
+"menu.open_apps" = "Открытые приложения";
+"menu.liquid_glass" = "Фон Liquid Glass";
+"menu.language" = "Язык";
+"menu.quit" = "Закрыть панель задач";
+"language.system" = "Системный ({lang})";
+
+"size.tiny" = "Очень маленькая";
+"size.small" = "Маленькая";
+"size.medium" = "Средняя";
+"size.large" = "Большая";
+"size.xlarge" = "Очень большая";
+"size.huge" = "Огромная";
+"size.increase" = "Увеличить (+2px)";
+"size.decrease" = "Уменьшить (-2px)";
+"size.custom" = "Свой размер…";
+"size.hint" = "Совет: перетащите верхний край панели, чтобы изменить размер свободно (от 22 до 160 пикс.).";
+
+"display.icon_and_label" = "Значок и имя";
+"display.icon_only" = "Только значки";
+
+/* Custom size alert */
+"alert.custom_size.title" = "Свой размер панели";
+"alert.custom_size.message" = "Высота в пикселях (от {min} до {max}).";
+
+/* Taskbar */
+"accessibility.prompt" = "Разрешить доступ Универсального доступа для управления окнами →";
+"help.minimize_all" = "Свернуть все окна";
+"help.trash" = "Корзина";
+
+/* Window controls */
+"window.untitled" = "Окно";
+"window.restore" = "Восстановить";
+"window.minimize" = "Свернуть";
+"window.close" = "Закрыть";
+"taskbar.pin" = "Закрепить на панели задач";
+"taskbar.unpin" = "Открепить от панели задач";
+
+/* Start menu session footer */
+"session.lock" = "Заблокировать экран";
+"session.sleep" = "Спящий режим";
+"session.logout" = "Выйти из системы";
+"session.restart" = "Перезагрузить";
+"session.shutdown" = "Выключить";
+
+"search.placeholder" = "Поиск приложения…";
+
+/* Start menu app grid */
+"app.trash" = "Переместить в корзину";
+"alert.trash_app.title" = "Удалить «{name}»?";
+"alert.trash_app.message" = "Приложение будет перемещено в корзину.";
+"alert.uninstall_failed.title" = "Не удалось удалить «{name}»";
+"alert.uninstall_failed.message" = "Возможно, это приложение защищено системой.\n{error}";
+
+/* Dock recovery */
+"alert.dock_recovery.title" = "Dock остался изменённым";
+"alert.dock_recovery.message" = "Предыдущий сеанс завершился аварийно. Восстановить исходные настройки Dock перед продолжением?";
+"button.restore_dock" = "Восстановить Dock";
+"button.continue_without_restoring" = "Продолжить без восстановления";
+
+/* Session confirmation dialogs */
+"session.logout_confirm.title" = "Выйти из системы?";
+"session.restart_confirm.title" = "Перезагрузить компьютер?";
+"session.shutdown_confirm.title" = "Выключить компьютер?";
+"session.confirm.message" = "Все открытые приложения будут закрыты.";
+
+/* App categories */
+"category.all" = "Все приложения";
+"category.utilities" = "Утилиты";
+"category.developer_tools" = "Разработка";
+"category.productivity" = "Офис";
+"category.graphics_design" = "Графика и дизайн";
+"category.photography" = "Фото";
+"category.video" = "Видео";
+"category.music" = "Музыка";
+"category.games" = "Игры";
+"category.social_networking" = "Социальные сети";
+"category.education" = "Образование";
+"category.finance" = "Финансы";
+"category.lifestyle" = "Образ жизни";
+"category.entertainment" = "Развлечения";
+"category.reference" = "Справочники";
+"category.news" = "Новости";
+"category.sports" = "Спорт";
+"category.travel" = "Путешествия";
+"category.weather" = "Погода";
+"category.healthcare_fitness" = "Здоровье и фитнес";
+"category.navigation" = "Навигация";
+"category.system" = "Система";
+"category.other" = "Другое";

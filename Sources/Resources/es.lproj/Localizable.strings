@@ -1,0 +1,97 @@
+/* General */
+"app.no_theme" = "No hay ningún tema disponible";
+"button.apply" = "Aplicar";
+"button.cancel" = "Cancelar";
+
+/* Personalization menu */
+"menu.theme" = "Tema";
+"menu.bar_size" = "Tamaño de la barra";
+"menu.open_apps" = "Aplicaciones abiertas";
+"menu.liquid_glass" = "Fondo de vidrio líquido";
+"menu.language" = "Idioma";
+"menu.quit" = "Salir de la barra de tareas";
+"language.system" = "Sistema ({lang})";
+
+"size.tiny" = "Muy pequeña";
+"size.small" = "Pequeña";
+"size.medium" = "Mediana";
+"size.large" = "Grande";
+"size.xlarge" = "Muy grande";
+"size.huge" = "Enorme";
+"size.increase" = "Agrandar (+2px)";
+"size.decrease" = "Reducir (-2px)";
+"size.custom" = "Tamaño personalizado…";
+"size.hint" = "Consejo: arrastra el borde superior de la barra para ajustarla libremente (22 a 160px).";
+
+"display.icon_and_label" = "Icono + nombre";
+"display.icon_only" = "Solo iconos";
+
+/* Custom size alert */
+"alert.custom_size.title" = "Tamaño personalizado de la barra";
+"alert.custom_size.message" = "Alto en píxeles ({min} a {max}).";
+
+/* Taskbar */
+"accessibility.prompt" = "Permitir el acceso de Accesibilidad para gestionar ventanas →";
+"help.minimize_all" = "Minimizar todas las ventanas";
+"help.trash" = "Papelera";
+
+/* Window controls */
+"window.untitled" = "Ventana";
+"window.restore" = "Restaurar";
+"window.minimize" = "Minimizar";
+"window.close" = "Cerrar";
+"taskbar.pin" = "Anclar a la barra de tareas";
+"taskbar.unpin" = "Desanclar de la barra de tareas";
+
+/* Start menu session footer */
+"session.lock" = "Bloquear pantalla";
+"session.sleep" = "Suspender";
+"session.logout" = "Cerrar sesión";
+"session.restart" = "Reiniciar";
+"session.shutdown" = "Apagar";
+
+"search.placeholder" = "Buscar una aplicación…";
+
+/* Start menu app grid */
+"app.trash" = "Mover a la papelera";
+"alert.trash_app.title" = "¿Eliminar «{name}»?";
+"alert.trash_app.message" = "La aplicación se moverá a la papelera.";
+"alert.uninstall_failed.title" = "No se pudo eliminar «{name}»";
+"alert.uninstall_failed.message" = "Es posible que esta aplicación esté protegida por el sistema.\n{error}";
+
+/* Dock recovery */
+"alert.dock_recovery.title" = "El Dock quedó modificado";
+"alert.dock_recovery.message" = "La sesión anterior no terminó con normalidad. ¿Quieres restaurar los ajustes originales del Dock antes de continuar?";
+"button.restore_dock" = "Restaurar el Dock";
+"button.continue_without_restoring" = "Continuar sin restaurar";
+
+/* Session confirmation dialogs */
+"session.logout_confirm.title" = "¿Cerrar sesión?";
+"session.restart_confirm.title" = "¿Reiniciar el equipo?";
+"session.shutdown_confirm.title" = "¿Apagar el equipo?";
+"session.confirm.message" = "Se cerrarán todas las aplicaciones abiertas.";
+
+/* App categories */
+"category.all" = "Todas las aplicaciones";
+"category.utilities" = "Utilidades";
+"category.developer_tools" = "Desarrollo";
+"category.productivity" = "Ofimática";
+"category.graphics_design" = "Diseño gráfico";
+"category.photography" = "Fotografía";
+"category.video" = "Vídeo";
+"category.music" = "Música";
+"category.games" = "Juegos";
+"category.social_networking" = "Redes sociales";
+"category.education" = "Educación";
+"category.finance" = "Finanzas";
+"category.lifestyle" = "Estilo de vida";
+"category.entertainment" = "Entretenimiento";
+"category.reference" = "Referencia";
+"category.news" = "Noticias";
+"category.sports" = "Deportes";
+"category.travel" = "Viajes";
+"category.weather" = "Meteorología";
+"category.healthcare_fitness" = "Salud y forma física";
+"category.navigation" = "Navegación";
+"category.system" = "Sistema";
+"category.other" = "Otra";

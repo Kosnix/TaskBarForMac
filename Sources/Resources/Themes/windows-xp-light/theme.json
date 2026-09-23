@@ -1,0 +1,8 @@
+{
+  "id": "windows-xp-light",
+  "name": "Windows XP Light",
+  "author": "Built-in",
+  "desktopEnvironment": "Windows",
+  "variant": "light",
+  "version": "1.0.0"
+}

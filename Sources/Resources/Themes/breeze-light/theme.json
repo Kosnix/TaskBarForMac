@@ -1,0 +1,8 @@
+{
+  "id": "breeze-light",
+  "name": "Breeze Light",
+  "author": "Built-in",
+  "desktopEnvironment": "KDE Plasma",
+  "variant": "light",
+  "version": "1.0.0"
+}

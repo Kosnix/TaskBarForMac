@@ -1,0 +1,8 @@
+{
+  "id": "windows-11-dark",
+  "name": "Windows 11 Dark",
+  "author": "Built-in",
+  "desktopEnvironment": "Windows",
+  "variant": "dark",
+  "version": "1.0.0"
+}

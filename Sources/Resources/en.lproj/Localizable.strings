@@ -1,0 +1,97 @@
+/* General */
+"app.no_theme" = "No theme available";
+"button.apply" = "Apply";
+"button.cancel" = "Cancel";
+
+/* Personalization menu */
+"menu.theme" = "Theme";
+"menu.bar_size" = "Bar Size";
+"menu.open_apps" = "Open Applications";
+"menu.liquid_glass" = "Liquid Glass Background";
+"menu.language" = "Language";
+"menu.quit" = "Quit Taskbar";
+"language.system" = "System ({lang})";
+
+"size.tiny" = "Tiny";
+"size.small" = "Small";
+"size.medium" = "Medium";
+"size.large" = "Large";
+"size.xlarge" = "Extra Large";
+"size.huge" = "Huge";
+"size.increase" = "Enlarge (+2px)";
+"size.decrease" = "Shrink (-2px)";
+"size.custom" = "Custom Size…";
+"size.hint" = "Tip: drag the bar's top edge to resize freely (22 to 160px).";
+
+"display.icon_and_label" = "Icon + Name";
+"display.icon_only" = "Icons Only";
+
+/* Custom size alert */
+"alert.custom_size.title" = "Custom Bar Size";
+"alert.custom_size.message" = "Height in pixels ({min} to {max}).";
+
+/* Taskbar */
+"accessibility.prompt" = "Allow Accessibility access to manage windows →";
+"help.minimize_all" = "Minimize All Windows";
+"help.trash" = "Trash";
+
+/* Window controls */
+"window.untitled" = "Window";
+"window.restore" = "Restore";
+"window.minimize" = "Minimize";
+"window.close" = "Close";
+"taskbar.pin" = "Pin to Taskbar";
+"taskbar.unpin" = "Unpin from Taskbar";
+
+/* Start menu session footer */
+"session.lock" = "Lock Screen";
+"session.sleep" = "Sleep";
+"session.logout" = "Log Out";
+"session.restart" = "Restart";
+"session.shutdown" = "Shut Down";
+
+"search.placeholder" = "Search for an application…";
+
+/* Start menu app grid */
+"app.trash" = "Move to Trash";
+"alert.trash_app.title" = "Delete \"{name}\"?";
+"alert.trash_app.message" = "The app will be moved to the Trash.";
+"alert.uninstall_failed.title" = "Couldn't delete \"{name}\"";
+"alert.uninstall_failed.message" = "This app may be protected by the system.\n{error}";
+
+/* Dock recovery */
+"alert.dock_recovery.title" = "The Dock Was Left Modified";
+"alert.dock_recovery.message" = "The previous session didn't end normally. Restore the Dock's original settings before continuing?";
+"button.restore_dock" = "Restore the Dock";
+"button.continue_without_restoring" = "Continue Without Restoring";
+
+/* Session confirmation dialogs */
+"session.logout_confirm.title" = "Log Out?";
+"session.restart_confirm.title" = "Restart the Computer?";
+"session.shutdown_confirm.title" = "Shut Down the Computer?";
+"session.confirm.message" = "All open applications will be closed.";
+
+/* App categories */
+"category.all" = "All Applications";
+"category.utilities" = "Utilities";
+"category.developer_tools" = "Developer Tools";
+"category.productivity" = "Productivity";
+"category.graphics_design" = "Graphics & Design";
+"category.photography" = "Photography";
+"category.video" = "Video";
+"category.music" = "Music";
+"category.games" = "Games";
+"category.social_networking" = "Social Networking";
+"category.education" = "Education";
+"category.finance" = "Finance";
+"category.lifestyle" = "Lifestyle";
+"category.entertainment" = "Entertainment";
+"category.reference" = "Reference";
+"category.news" = "News";
+"category.sports" = "Sports";
+"category.travel" = "Travel";
+"category.weather" = "Weather";
+"category.healthcare_fitness" = "Health & Fitness";
+"category.navigation" = "Navigation";
+"category.system" = "System";
+"category.other" = "Other";

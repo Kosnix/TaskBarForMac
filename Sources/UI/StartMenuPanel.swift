@@ -1,0 +1,165 @@
+import AppKit
+import SwiftUI
+
+/// The Kickoff-style start menu, as a real (resizable) floating window
+/// instead of a SwiftUI `.popover` — a popover has no built-in way to be
+/// dragged bigger by the user, which is exactly what's wanted here (see
+/// `ThemeStore.startMenuSizeOverride`). Anchored just above the start
+/// button, flush with the screen's left edge, and grows up/right from
+/// there via the corner handle.
+final class StartMenuPanel: NSPanel {
+    private let themeStore: ThemeStore
+    private let windowManager: WindowManager
+    private let appDiscovery: AppDiscovery
+    private let state: StartMenuState
+    private static let resizeHandleSize: CGFloat = 16
+
+    init(
+        themeStore: ThemeStore,
+        windowManager: WindowManager,
+        appDiscovery: AppDiscovery,
+        state: StartMenuState
+    ) {
+        self.themeStore = themeStore
+        self.windowManager = windowManager
+        self.appDiscovery = appDiscovery
+        self.state = state
+        let initialFrame = Self.frame(themeStore: themeStore)
+
+        super.init(
+            contentRect: initialFrame,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        isFloatingPanel = true
+        level = Self.aboveTaskbarLevel
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        hidesOnDeactivate = false
+        isMovable = false
+        isReleasedWhenClosed = false
+
+        let container = NSView(frame: NSRect(origin: .zero, size: initialFrame.size))
+        container.autoresizesSubviews = true
+
+        let hostingView = NSHostingView(rootView: makeRootView())
+        hostingView.frame = container.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        container.addSubview(hostingView)
+
+        let handle = CornerResizeHandleView(frame: NSRect(
+            x: container.bounds.width - Self.resizeHandleSize,
+            y: container.bounds.height - Self.resizeHandleSize,
+            width: Self.resizeHandleSize,
+            height: Self.resizeHandleSize
+        ))
+        handle.autoresizingMask = [.minXMargin, .minYMargin]
+        handle.onDrag = { [weak themeStore] dWidth, dHeight in
+            guard let themeStore else { return }
+            let current = themeStore.effectiveStartMenuSize
+            let newSize = CGSize(
+                width: min(ThemeStore.startMenuMaxSize.width, max(ThemeStore.startMenuMinSize.width, current.width + dWidth)),
+                height: min(ThemeStore.startMenuMaxSize.height, max(ThemeStore.startMenuMinSize.height, current.height + dHeight))
+            )
+            themeStore.startMenuSizeOverride = newSize
+        }
+        container.addSubview(handle)
+
+        contentView = container
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(repositionNow),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(repositionNow),
+            name: .startMenuSizeDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(repositionNow),
+            name: .panelSizeDidChange,
+            object: nil
+        )
+    }
+
+    private func makeRootView() -> StartMenuView {
+        // Same fix-up `TaskbarView.content(for:)` applies: `activeTheme`
+        // on its own still carries the theme's *default* `panel.height`
+        // (e.g. 36), not the user's effective one (override, or floored by
+        // the Dock) — and icon sizing here is meant to track the taskbar's
+        // actual height, not the theme's nominal one.
+        var theme = themeStore.activeTheme ?? ThemeLoader.loadAllThemes()[0]
+        theme.tokens.panel.height = themeStore.effectivePanelHeight
+        return StartMenuView(
+            appDiscovery: appDiscovery,
+            windowManager: windowManager,
+            theme: theme,
+            state: state,
+            liquidGlassEnabled: themeStore.liquidGlassEnabled,
+            liquidGlassIntensity: themeStore.liquidGlassIntensity
+        ) { [weak state] in
+            state?.isPresented = false
+        }
+    }
+
+    /// Shows or hides the panel to match `state.isPresented`, rebuilding
+    /// its content with the latest theme/settings first — called whenever
+    /// that changes (wired up from `StartMenuState.onPresentationChange` by
+    /// whoever owns this panel).
+    func syncVisibility() {
+        guard state.isPresented else {
+            orderOut(nil)
+            return
+        }
+        (contentView?.subviews.first as? NSHostingView<StartMenuView>)?.rootView = makeRootView()
+        reposition()
+        orderFrontRegardless()
+        makeKey()
+    }
+
+    /// Called when `TaskbarPanel` itself is being hidden (fullscreen) —
+    /// the menu doesn't make sense floating on its own without the bar
+    /// it's anchored to, so this dismisses it the same way an outside
+    /// click would (updating `state.isPresented`, not just hiding the
+    /// window), in case it was open.
+    func syncVisibilityAsDismissed() {
+        state.isPresented = false
+    }
+
+    @objc private func repositionNow() {
+        guard state.isPresented else { return }
+        reposition()
+    }
+
+    private func reposition() {
+        setFrame(Self.frame(themeStore: themeStore), display: true)
+    }
+
+    private static func frame(themeStore: ThemeStore) -> NSRect {
+        let size = themeStore.effectiveStartMenuSize
+        guard let screen = DockController.dockScreen else {
+            return NSRect(origin: .zero, size: size)
+        }
+        let barHeight = themeStore.effectivePanelHeight
+        return NSRect(x: screen.frame.minX, y: screen.frame.minY + barHeight, width: size.width, height: size.height)
+    }
+
+    /// One level above the taskbar panel's own level, so the menu renders
+    /// on top of it instead of behind it.
+    private static var aboveTaskbarLevel: NSWindow.Level {
+        NSWindow.Level(rawValue: Int(kCGDockWindowLevel) + 2)
+    }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+    override var isKeyWindow: Bool { true }
+}

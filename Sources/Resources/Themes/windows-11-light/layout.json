@@ -1,0 +1,7 @@
+{
+  "zones": {
+    "left": ["start-button"],
+    "center": ["task-list"],
+    "right": ["clock", "trash", "minimize-all"]
+  }
+}

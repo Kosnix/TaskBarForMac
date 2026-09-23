@@ -1,0 +1,8 @@
+{
+  "id": "windows-7-light",
+  "name": "Windows 7 Light",
+  "author": "Built-in",
+  "desktopEnvironment": "Windows",
+  "variant": "light",
+  "version": "1.0.0"
+}

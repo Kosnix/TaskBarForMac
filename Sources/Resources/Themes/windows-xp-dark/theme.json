@@ -1,0 +1,8 @@
+{
+  "id": "windows-xp-dark",
+  "name": "Windows XP Dark",
+  "author": "Built-in",
+  "desktopEnvironment": "Windows",
+  "variant": "dark",
+  "version": "1.0.0"
+}
