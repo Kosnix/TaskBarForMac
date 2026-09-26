@@ -5,8 +5,15 @@
 
 /* Personalization menu */
 "menu.settings" = "Paramètres…";
+"menu.edit_icons" = "Mode Édition";
 "menu.theme" = "Thème";
 "menu.bar_size" = "Taille de la barre";
+"settings.icon_size" = "Taille des icônes";
+"settings.icon_spacing" = "Espacement des icônes";
+"account.open_settings" = "Ouvrir les réglages du compte Apple";
+"icon_picker.title" = "Choisir une nouvelle icône";
+"icon_edit.done" = "Terminé";
+"icon_edit.restore_original" = "Rétablir l'icône d'origine";
 "menu.open_apps" = "Applications ouvertes";
 "menu.liquid_glass" = "Fond en verre liquide";
 "menu.liquid_glass_intensity" = "Intensité du verre liquide";
@@ -39,10 +46,18 @@
 "settings.start_menu_style" = "Style";
 "settings.start_menu_style.kickoff" = "Kickoff";
 "settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
 "start.pinned" = "Épinglé";
 "start.all_apps" = "Toutes les applications";
+"start.all_programs" = "Tous les programmes";
 "start.search_results" = "Résultats de la recherche";
+"start.documents" = "Documents";
+"start.pictures" = "Images";
+"start.music" = "Musique";
+"start.downloads" = "Téléchargements";
+"start.computer" = "Ordinateur";
+"start.control_panel" = "Panneau de configuration";
 
 /* Taskbar */
 "accessibility.prompt" = "Autoriser l'accès à l'Accessibilité pour gérer les fenêtres →";

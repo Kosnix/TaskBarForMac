@@ -20,13 +20,17 @@ Projet personnel, pas affilié à KDE ni à Microsoft — juste inspiré de leur
 
 ## Fonctionnalités
 
-- **Barre des tâches** : icônes des fenêtres ouvertes (regroupées si plusieurs fenêtres par app), épinglage d'applications, réorganisation par glisser-déposer, réduction de toutes les fenêtres, horloge (avec date en option), corbeille.
+- **Barre des tâches** : icônes des fenêtres ouvertes (regroupées si plusieurs fenêtres par app), épinglage d'applications, réduction de toutes les fenêtres, horloge (avec date en option), corbeille.
+- **Édition des icônes** : rester appuyé sur une icône (ou clic droit sur la barre → **Mode Édition**) fait trembler toutes les icônes, comme sur iOS — dans ce mode, on peut les glisser pour les réorganiser (aperçu en direct, écrit dans le vrai Dock seulement à la sortie du mode), taper sur une icône pour lui donner une image personnalisée, et glisser une app depuis le Finder directement sur la barre pour l'épingler.
+- **Taille et espacement des icônes** : réglables en pourcentage, indépendamment de la hauteur de la barre.
 - **Alignement** : icônes alignées à gauche, centrées, ou centrées avec le bouton démarrer.
 - **Auto-hide** : la barre peut se rétracter automatiquement, comme sous Windows.
 - **Menu démarrer**, au choix :
   - **Kickoff** (façon Plasma) : recherche, catégories, grille d'applications.
   - **Windows 11** : recherche, grille d'applications épinglées ou complète.
+  - **Windows 7** : liste épinglée/toutes applications triée par lancement le plus récent, photo de compte, liens rapides.
   - **Spotlight** : ouvre directement le vrai Spotlight de macOS, sans interface propre.
+  - Chaque style affiche ta vraie photo de compte macOS et se navigue entièrement au clavier (flèches + Entrée), et cliquer sur la photo ouvre **Réglages Système → Compte Apple**.
 - **Thèmes** : Breeze (clair/sombre), macOS, Windows 7, Windows 10, Windows 11, Windows XP — chacun avec un mode Clair / Sombre / Automatique (suit le système), indépendant du choix du thème.
 - **Liquid Glass** : fond translucide avec intensité réglable.
 - **Multilingue** : français, anglais, espagnol, russe (ou suit la langue du système).

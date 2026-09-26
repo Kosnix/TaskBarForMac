@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>dev.nikos.taskbarreplacement</string>
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.1.0</string>
     <key>CFBundleExecutable</key>
     <string>TaskbarReplacement</string>
     <key>CFBundleIconFile</key>
@@ -32,18 +32,5 @@
     <string>Cette application a besoin d'envoyer des évènements Apple à System Events pour verrouiller, redémarrer ou éteindre depuis le menu démarrer.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
-    <key>UTExportedTypeDeclarations</key>
-    <array>
-        <dict>
-            <key>UTTypeIdentifier</key>
-            <string>dev.nikos.taskbarreplacement.taskitem</string>
-            <key>UTTypeDescription</key>
-            <string>Taskbar Item</string>
-            <key>UTTypeConformsTo</key>
-            <array>
-                <string>public.data</string>
-            </array>
-        </dict>
-    </array>
 </dict>
 </plist>

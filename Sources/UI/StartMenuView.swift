@@ -66,7 +66,26 @@ struct StartMenuView: View {
 
     /// Kickoff's "leave" row: session control for the current login session.
     private var sessionFooter: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
+            Button(action: AppleAccountSettings.open) {
+                Group {
+                    if let photo = AccountPhoto.current() {
+                        Image(nsImage: photo)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 22, height: 22)
+                            .clipShape(Circle())
+                    } else {
+                        ThemeIcon(url: theme.iconURL("start-button"), colorHex: tokens.colors.textSecondary, size: 20)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .help(L("account.open_settings"))
+            Text(NSFullUserName())
+                .font(.system(size: tokens.typography.fontSize))
+                .foregroundStyle(Color(hex: tokens.colors.textSecondary))
+                .lineLimit(1)
             Spacer()
             sessionButton(icon: "session-lock", label: L("session.lock"), action: SessionManager.lockScreen)
             sessionButton(icon: "session-sleep", label: L("session.sleep"), action: SessionManager.sleep)
@@ -97,12 +116,15 @@ struct StartMenuView: View {
                 placeholder: L("search.placeholder"),
                 text: Binding(get: { state.query }, set: { state.query = $0 }),
                 textColor: NSColor(Color(hex: tokens.colors.textPrimary)),
+                accentColor: NSColor(Color(hex: tokens.colors.accent)),
                 fontSize: tokens.typography.fontSize,
                 onNavigate: { direction in moveSelection(direction) },
                 onSubmit: { confirmSelection() }
             )
             .frame(height: 20)
         }
+        .padding(10)
+        .background(SearchFieldBackground(tokens: tokens))
         .padding(10)
     }
 
@@ -177,7 +199,7 @@ struct StartMenuView: View {
 
     private var categoryList: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: ["cat-all"] + appDiscovery.categories.map { "cat-\($0)" }) {
                 VStack(alignment: .leading, spacing: 2) {
                     categoryRow(title: L("category.all"), value: nil)
                         .id("cat-all")
@@ -230,7 +252,7 @@ struct StartMenuView: View {
 
     private var appGrid: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: filteredApps.map(\.id)) {
                 LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
                         appCell(app, isSelected: index == state.selectedIndex && state.focusedRegion == .grid) {
@@ -260,9 +282,9 @@ struct StartMenuView: View {
                 // Same size as a taskbar app icon (`TaskButtonView.iconSize`
                 // etc.), not a fixed per-theme constant — so resizing the
                 // taskbar (and its icons) keeps everything matching.
-                Image(nsImage: app.icon)
+                Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                     .resizable()
-                    .frame(width: max(12, tokens.panel.height - 16), height: max(12, tokens.panel.height - 16))
+                    .frame(width: tokens.taskbarIconSize, height: tokens.taskbarIconSize)
                 Text(app.displayName)
                     .font(.system(size: tokens.typography.fontSize - 1))
                     .lineLimit(1)
@@ -311,6 +333,7 @@ struct StartMenuView: View {
     }
 
     private func launch(_ app: InstalledApp) {
+        LaunchHistoryStore.recordLaunch(bundleIdentifier: app.bundleIdentifier)
         NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
         onLaunch()
     }

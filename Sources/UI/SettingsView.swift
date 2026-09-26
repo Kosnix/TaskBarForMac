@@ -91,6 +91,24 @@ struct SettingsView: View {
         )
     }
 
+    /// The underlying ratio (`ThemeTokens.taskbarIconSpacingRatio`) still
+    /// runs from -1 (padding shrunk to nothing) to 0.5 (the widest gap) —
+    /// unchanged, since that's what the spacing/padding formulas actually
+    /// use. Only how the slider *displays* that range changes here: its own
+    /// -100…50 stretch remapped to a plain 0…100, so the low end (no
+    /// padding left to give up) reads as 0 and the high end reads as 100
+    /// instead of showing negative numbers to whoever's dragging it.
+    private static let spacingRatioRange: ClosedRange<Double> = -1...0.5
+
+    private var taskbarIconSpacingDisplay: Binding<Double> {
+        let range = Self.spacingRatioRange
+        let span = range.upperBound - range.lowerBound
+        return Binding(
+            get: { (themeStore.taskbarIconSpacingRatio - range.lowerBound) / span * 100 },
+            set: { themeStore.taskbarIconSpacingRatio = $0 / 100 * span + range.lowerBound }
+        )
+    }
+
     var body: some View {
         Form {
             Section(L("settings.section.general")) {
@@ -123,6 +141,26 @@ struct SettingsView: View {
                     }
                     Slider(value: panelHeight, in: 22...160, step: 1)
                 }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(L("settings.icon_size"))
+                        Spacer()
+                        Text("\(Int((themeStore.taskbarIconRatio * 100).rounded())) %")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $themeStore.taskbarIconRatio, in: 0.4...1, step: 0.05)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(L("settings.icon_spacing"))
+                        Spacer()
+                        Text("\(Int(taskbarIconSpacingDisplay.wrappedValue.rounded())) %")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: taskbarIconSpacingDisplay, in: 0...100, step: 5)
+                }
                 Picker(L("settings.alignment"), selection: alignment) {
                     ForEach([Alignment.left, .center, .centerWithStart], id: \.self) { option in
                         Text(option.label).tag(option)
@@ -140,6 +178,7 @@ struct SettingsView: View {
                 Picker(L("settings.start_menu_style"), selection: $themeStore.startMenuStyle) {
                     Text(L("settings.start_menu_style.kickoff")).tag(StartMenuStyle.kickoff)
                     Text(L("settings.start_menu_style.windows11")).tag(StartMenuStyle.windows11)
+                    Text(L("settings.start_menu_style.windows7")).tag(StartMenuStyle.windows7)
                     Text(L("settings.start_menu_style.spotlight")).tag(StartMenuStyle.realSpotlight)
                 }
                 .labelsHidden()

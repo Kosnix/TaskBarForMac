@@ -12,7 +12,7 @@ struct GroupedTaskButtonView: View {
     let windowManager: WindowManager
     let width: CGFloat
 
-    private var iconSize: CGFloat { max(12, tokens.panel.height - 16) }
+    private var iconSize: CGFloat { tokens.taskbarIconSize }
     private var isHovered: Bool { windowManager.hoveredGroupID == bundleIdentifier }
     private var anyActive: Bool { windows.contains { !$0.isMinimized } }
     /// `bundleIdentifier` falls back to a synthetic "pid-…" key when a
@@ -22,14 +22,15 @@ struct GroupedTaskButtonView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            if let appIcon {
-                Image(nsImage: appIcon)
+            if let icon = windowManager.resolvedIcon(bundleIdentifier: realBundleIdentifier, fallback: appIcon) {
+                Image(nsImage: icon)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
+                    .wiggle(isActive: windowManager.isEditingIcons, seed: bundleIdentifier.hashValue)
             }
             windowCountBadge
         }
-        .padding(.horizontal, tokens.spacing.edgePadding)
+        .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
         // Left-aligned, not the default center: when this button's
         // allocated `width` is wider than its actual content (few open
         // windows sharing a lot of available space), centering left a gap
@@ -46,18 +47,11 @@ struct GroupedTaskButtonView: View {
         // from the true bottom edge with it).
         .overlay(alignment: .bottomLeading) {
             allMinimizedDot
-                .offset(x: tokens.spacing.edgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
+                .offset(x: tokens.effectiveTaskbarEdgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
         }
         .overlay(activeUnderline, alignment: .bottom)
         .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
         .contentShape(Rectangle())
-        .onTapGesture {
-            // Primary click with no clear "the" window: raise the first one,
-            // same as the ⌘⌥1…9 shortcut does for a group.
-            if let first = windows.first {
-                windowManager.raise(first)
-            }
-        }
         .help(appName)
         .onHover { hovering in
             windowManager.setGroupHovered(bundleIdentifier, hovering: hovering)
@@ -65,6 +59,11 @@ struct GroupedTaskButtonView: View {
         .contextMenu {
             Button(windowManager.isPinned(bundleIdentifier: bundleIdentifier) ? L("taskbar.unpin") : L("taskbar.pin")) {
                 windowManager.togglePin(pid: windows.first?.pid ?? 0, bundleIdentifier: bundleIdentifier, displayName: appName)
+            }
+            if windowManager.isEditingIcons, windowManager.hasCustomIcon(bundleIdentifier: realBundleIdentifier) {
+                Button(L("icon_edit.restore_original")) {
+                    windowManager.restoreOriginalIcon(for: realBundleIdentifier)
+                }
             }
         }
         .taskReorderable(bundleIdentifier: realBundleIdentifier, windowManager: windowManager) {
@@ -86,6 +85,16 @@ struct GroupedTaskButtonView: View {
                     }
             }
         )
+        // Last: needs to sit on top of `.taskReorderable`'s own `.onDrop`
+        // target to actually receive left-clicks — see
+        // `IconPressGesture.swift`'s doc comment.
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: realBundleIdentifier) {
+            // Primary click with no clear "the" window: raise the first
+            // one, same as the ⌘⌥1…9 shortcut does for a group.
+            if let first = windows.first {
+                windowManager.raise(first)
+            }
+        }
     }
 
     private var windowCountBadge: some View {

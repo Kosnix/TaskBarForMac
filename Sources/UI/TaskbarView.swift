@@ -37,6 +37,8 @@ struct TaskbarView: View {
         var theme = originalTheme
         theme.tokens.panel.height = themeStore.effectivePanelHeight
         theme.tokens.taskButton.displayStyle = themeStore.effectiveTaskDisplayStyle
+        theme.tokens.taskbarIconRatio = themeStore.taskbarIconRatio
+        theme.tokens.taskbarIconSpacingRatio = themeStore.taskbarIconSpacingRatio
         if !themeStore.clockEnabled {
             // Strip it out of every zone up front, rather than just
             // rendering nothing where it would go — that would still leave
@@ -69,6 +71,13 @@ struct TaskbarView: View {
         return GeometryReader { geometry in
             ZStack {
                 background(tokens: tokens)
+                    // Dropping an app from Finder onto empty bar background
+                    // pins it too, not just when it lands directly on an
+                    // existing icon (`taskReorderable`) — this sits behind
+                    // every icon in the `ZStack`, so a drop that *does* land
+                    // on one still reaches that icon's own drop target
+                    // first.
+                    .pinsDroppedApplications(windowManager: windowManager)
 
                 // The start button and "Réduire tout" are ordinary
                 // siblings in this same `HStack` now, not a separately
@@ -166,7 +175,7 @@ struct TaskbarView: View {
                 // Matches the actual render: same size as a taskbar app
                 // icon (see `TaskButtonView.iconSize`), padded on the
                 // leading side only now (no trailing padding).
-                width += max(12, tokens.panel.height - 16) + tokens.spacing.edgePadding
+                width += tokens.taskbarIconSize + tokens.spacing.edgePadding
             case "minimize-all":
                 // Matches the actual render: a vertical strip half as wide
                 // as it used to be.
@@ -286,7 +295,7 @@ struct TaskbarView: View {
                 ThemeIcon(
                     url: theme.iconURL("start-button"),
                     colorHex: tokens.colors.textPrimary,
-                    size: tokens.startButton.fillHeight == true ? tokens.panel.height : max(12, tokens.panel.height - 16)
+                    size: tokens.startButton.fillHeight == true ? tokens.panel.height : tokens.taskbarIconSize
                 )
                 if tokens.startButton.showLabel {
                     Text(tokens.startButton.label)
@@ -343,13 +352,20 @@ struct TaskbarView: View {
         // for the same space, and cap at the theme's maxWidth when there's
         // plenty of room — instead of a fixed size that either wastes space
         // or overflows the panel.
-        let iconOnlyWidth = max(24, tokens.panel.height - 8)
+        //
+        // Matches each button view's own icon size + horizontal padding
+        // exactly (not just `panel.height`-derived, which could land
+        // narrower than the icon+padding actually need) — otherwise the
+        // icon's leading-aligned HStack overflows this frame asymmetrically,
+        // throwing off both the icon's own centering and the active-window
+        // underline (which spans this same width) relative to it.
+        let iconOnlyWidth = max(24, tokens.taskbarIconSize + tokens.effectiveTaskbarEdgePadding * 2)
         let itemCount = max(1, entries.count)
         let perItemBudget = availableWidth / CGFloat(itemCount)
         let itemWidth = isIconOnly ? iconOnlyWidth : min(tokens.taskButton.maxWidth, max(iconOnlyWidth, perItemBudget))
         let showLabels = !isIconOnly && itemWidth >= iconOnlyWidth + 50
 
-        HStack(spacing: tokens.spacing.itemSpacing) {
+        HStack(spacing: tokens.effectiveTaskbarIconSpacing) {
             // Pinned Dock launchers show up (and stay clickable) even
             // without Accessibility access; only real window control needs
             // that grant.
@@ -389,7 +405,29 @@ struct TaskbarView: View {
                 }
                 .buttonStyle(.plain)
             }
+            if windowManager.isEditingIcons {
+                doneEditingIconsButton(tokens: tokens)
+            }
         }
+    }
+
+    /// The "jiggle mode" exit affordance (see `WindowManager.isEditingIcons`)
+    /// — Escape does the same thing (`ShortcutsManager`), but a mouse-only
+    /// user needs something to click, the same way iOS's own edit mode has
+    /// always needed *some* way out for someone without a physical Escape
+    /// key at all.
+    private func doneEditingIconsButton(tokens: ThemeTokens) -> some View {
+        Button {
+            windowManager.isEditingIcons = false
+        } label: {
+            Text(L("icon_edit.done"))
+                .font(.system(size: tokens.typography.fontSize, weight: .semibold))
+                .foregroundStyle(Color(hex: tokens.colors.accentText))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color(hex: tokens.colors.accent)))
+        }
+        .buttonStyle(.plain)
     }
 
     // No icon, half the previous width, with a visible frame — a plain

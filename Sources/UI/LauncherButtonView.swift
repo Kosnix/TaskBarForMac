@@ -16,23 +16,23 @@ struct LauncherButtonView: View {
     let onLaunch: () -> Void
 
     private var isHovered: Bool { windowManager.hoveredWindowID == "launcher-\(app.id)" }
-    private var iconSize: CGFloat { max(12, tokens.panel.height - 16) }
+    private var iconSize: CGFloat { tokens.taskbarIconSize }
 
     var body: some View {
         // Icon only, always — "icon + name" only ever applies to actually
         // open windows; a pinned-but-closed launcher stays icon-only
         // regardless, matching how the real Dock never shows names either.
         HStack(spacing: 6) {
-            Image(nsImage: app.icon)
+            Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                 .resizable()
                 .frame(width: iconSize, height: iconSize)
+                .wiggle(isActive: windowManager.isEditingIcons, seed: app.id.hashValue)
         }
-        .padding(.horizontal, tokens.spacing.edgePadding)
+        .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
         .background(isHovered ? Color(hex: tokens.colors.accent).opacity(0.3) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
         .contentShape(Rectangle())
-        .onTapGesture(perform: onLaunch)
         .help(app.displayName)
         .onHover { isHovering in
             windowManager.hoveredWindowID = isHovering ? "launcher-\(app.id)" : (windowManager.hoveredWindowID == "launcher-\(app.id)" ? nil : windowManager.hoveredWindowID)
@@ -41,9 +41,18 @@ struct LauncherButtonView: View {
             Button(L("taskbar.unpin")) {
                 windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
             }
+            if windowManager.isEditingIcons, windowManager.hasCustomIcon(bundleIdentifier: app.bundleIdentifier) {
+                Button(L("icon_edit.restore_original")) {
+                    windowManager.restoreOriginalIcon(for: app.bundleIdentifier)
+                }
+            }
         }
         .taskReorderable(bundleIdentifier: app.bundleIdentifier, windowManager: windowManager) {
             windowManager.launch(app)
         }
+        // Last: needs to sit on top of `.taskReorderable`'s own `.onDrop`
+        // target to actually receive left-clicks — see
+        // `IconPressGesture.swift`'s doc comment.
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch)
     }
 }

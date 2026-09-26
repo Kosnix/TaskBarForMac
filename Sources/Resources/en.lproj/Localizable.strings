@@ -5,8 +5,15 @@
 
 /* Personalization menu */
 "menu.settings" = "Settings…";
+"menu.edit_icons" = "Edit Mode";
 "menu.theme" = "Theme";
 "menu.bar_size" = "Bar Size";
+"settings.icon_size" = "Icon Size";
+"settings.icon_spacing" = "Icon Spacing";
+"account.open_settings" = "Open Apple Account Settings";
+"icon_picker.title" = "Choose a New Icon";
+"icon_edit.done" = "Done";
+"icon_edit.restore_original" = "Restore Original Icon";
 "menu.open_apps" = "Open Applications";
 "menu.liquid_glass" = "Liquid Glass Background";
 "menu.liquid_glass_intensity" = "Liquid Glass Intensity";
@@ -39,10 +46,18 @@
 "settings.start_menu_style" = "Style";
 "settings.start_menu_style.kickoff" = "Kickoff";
 "settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
 "start.pinned" = "Pinned";
 "start.all_apps" = "All Apps";
+"start.all_programs" = "All Programs";
 "start.search_results" = "Search Results";
+"start.documents" = "Documents";
+"start.pictures" = "Pictures";
+"start.music" = "Music";
+"start.downloads" = "Downloads";
+"start.computer" = "Computer";
+"start.control_panel" = "Control Panel";
 
 /* Taskbar */
 "accessibility.prompt" = "Allow Accessibility access to manage windows →";

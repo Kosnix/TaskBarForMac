@@ -73,6 +73,57 @@ struct ThemeTokens: Codable, Equatable {
     var spacing: SpacingTokens
     var taskButton: TaskButtonTokens
     var startButton: StartButtonTokens
+
+    /// A user preference (see `ThemeStore.taskbarIconRatio`), baked into a
+    /// mutable copy of the active theme's tokens at the same point
+    /// `panel.height` and `taskButton.displayStyle` overrides already are
+    /// (see `TaskbarView.content(for:)` and `StartMenuPanel`) — not part of
+    /// any theme's own `tokens.json`, so it stays `nil` (and falls back to
+    /// `defaultTaskbarIconRatio`) for every existing theme file until that
+    /// override is applied.
+    var taskbarIconRatio: Double?
+
+    /// A fixed proportion of the panel's own height, rather than a flat
+    /// inset (`height - 16px`) — a flat inset shrinks an icon's *share* of
+    /// the bar as the bar gets taller (and grows it as the bar gets
+    /// shorter), so two themes with different `panel.height` never looked
+    /// consistently "sized" relative to their own bar. A fixed ratio keeps
+    /// that relationship constant across every theme. Single source of
+    /// truth for every task/launcher button's icon size — see
+    /// `TaskButtonView`, `GroupedTaskButtonView`, `LauncherButtonView`,
+    /// `TaskbarView`'s own width math, and `StartMenuView`'s session footer.
+    static let defaultTaskbarIconRatio: Double = 0.7
+
+    var taskbarIconSize: CGFloat {
+        max(12, CGFloat(panel.height) * (taskbarIconRatio ?? Self.defaultTaskbarIconRatio))
+    }
+
+    /// Same override mechanism as `taskbarIconRatio` (see
+    /// `ThemeStore.taskbarIconSpacingRatio`) — how much room sits between
+    /// consecutive task/launcher buttons specifically, scoped to just that
+    /// row rather than reusing `spacing.itemSpacing`, which also spaces out
+    /// unrelated modules (the clock, the start button, …) that this
+    /// setting isn't meant to touch. Expressed as a fraction of the icon's
+    /// own size (like `taskbarIconRatio` is a fraction of the panel's own
+    /// height) rather than a flat point value, so the gap keeps looking
+    /// proportional as icons themselves are resized instead of turning
+    /// cramped or oversized at the extremes.
+    var taskbarIconSpacingRatio: Double?
+    static let defaultTaskbarIconSpacingRatio: Double = 0.15
+
+    /// Below 0%, there's no gap left to remove (already at zero) — the
+    /// slider instead keeps tightening the row by shrinking each button's
+    /// own internal padding around its icon, down to none at -100%. Above
+    /// 0%, that padding is untouched (only the gap between buttons grows).
+    var effectiveTaskbarIconSpacing: CGFloat {
+        max(0, taskbarIconSize * (taskbarIconSpacingRatio ?? Self.defaultTaskbarIconSpacingRatio))
+    }
+
+    var effectiveTaskbarEdgePadding: CGFloat {
+        let ratio = taskbarIconSpacingRatio ?? Self.defaultTaskbarIconSpacingRatio
+        guard ratio < 0 else { return CGFloat(spacing.edgePadding) }
+        return max(0, CGFloat(spacing.edgePadding) * CGFloat(1 + ratio))
+    }
 }
 
 /// `layout.json` — which modules appear in which zone of the panel.

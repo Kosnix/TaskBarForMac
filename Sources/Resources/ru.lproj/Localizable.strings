@@ -5,8 +5,15 @@
 
 /* Personalization menu */
 "menu.settings" = "Настройки…";
+"menu.edit_icons" = "Режим редактирования";
 "menu.theme" = "Тема";
 "menu.bar_size" = "Размер панели";
+"settings.icon_size" = "Размер значков";
+"settings.icon_spacing" = "Интервал между значками";
+"account.open_settings" = "Открыть настройки Apple ID";
+"icon_picker.title" = "Выбрать новый значок";
+"icon_edit.done" = "Готово";
+"icon_edit.restore_original" = "Восстановить исходный значок";
 "menu.open_apps" = "Открытые приложения";
 "menu.liquid_glass" = "Фон Liquid Glass";
 "menu.liquid_glass_intensity" = "Интенсивность Liquid Glass";
@@ -39,10 +46,18 @@
 "settings.start_menu_style" = "Стиль";
 "settings.start_menu_style.kickoff" = "Kickoff";
 "settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
 "start.pinned" = "Закреплённые";
 "start.all_apps" = "Все приложения";
+"start.all_programs" = "Все программы";
 "start.search_results" = "Результаты поиска";
+"start.documents" = "Документы";
+"start.pictures" = "Изображения";
+"start.music" = "Музыка";
+"start.downloads" = "Загрузки";
+"start.computer" = "Компьютер";
+"start.control_panel" = "Панель управления";
 
 /* Taskbar */
 "accessibility.prompt" = "Разрешить доступ Универсального доступа для управления окнами →";

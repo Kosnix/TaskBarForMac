@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Observation
+import SwiftUI
 
 /// Not in any public header, but a long-standing, widely-relied-upon symbol
 /// (used by e.g. yabai, Hammerspoon, Amethyst) for turning an AXUIElement
@@ -67,8 +68,101 @@ final class WindowManager {
     /// non-activating, unusually-leveled panel) knows where to position
     /// itself for whichever group is currently hovered.
     var groupButtonFrames: [String: CGRect] = [:]
+    /// Every taskbar icon's own frame (not just groups — see `groupButtonFrames`
+    /// just above, kept separate since it serves a different, older
+    /// feature), same shared `"taskbarRoot"` coordinate space. Read by
+    /// `PressAndHoldView` (`IconPressGesture.swift`) to figure out which
+    /// icon a live reorder-drag is currently over, by simple geometric
+    /// containment — reordering no longer goes through SwiftUI's
+    /// `.draggable`/`.onDrop` at all, since that system and this app's own
+    /// raw-AppKit tap/long-press detector turned out to fight over the same
+    /// mouse-down/mouse-up sequence.
+    var iconFrames: [String: CGRect] = [:]
     private var hoverClearWorkItem: DispatchWorkItem?
     private var refreshTimer: Timer?
+
+    /// The iOS-springboard-style "jiggle" edit mode — entered by
+    /// long-pressing any taskbar icon (see `TaskButtonView` and its
+    /// siblings' `.onLongPressGesture`), left via the taskbar's own "Terminé"
+    /// button or the Escape key (`ShortcutsManager`). While active, a tap on
+    /// an icon opens a file picker to assign it a custom image instead of
+    /// launching/raising the app.
+    ///
+    /// Leaving edit mode is also what commits `pendingIconOrder` to disk
+    /// (see its own doc comment) — every drag during the session is a pure
+    /// in-memory preview until this flips back to `false`.
+    var isEditingIcons = false {
+        didSet {
+            guard oldValue == true, isEditingIcons == false else { return }
+            commitPendingIconOrder()
+        }
+    }
+
+    /// A live, in-memory-only reordering while dragging icons around in
+    /// edit mode — every entry's bundle identifier, in the order being
+    /// previewed. `nil` means "no drag has happened yet this edit session,
+    /// just show the real (disk) order". Kept separate from actually
+    /// writing to `DockPinnedAppsStore` (what `reorder` used to do
+    /// directly) because that write happens on *every* icon the drag
+    /// crosses — real-time visual feedback needs something far cheaper
+    /// than a disk write each time, and only ever writing once, when edit
+    /// mode ends (`commitPendingIconOrder`), is exactly that.
+    private var pendingIconOrder: [String]?
+
+    /// Bumped whenever a custom icon is assigned or removed — `IconOverrideStore`
+    /// itself is a plain enum backed by files on disk, not something SwiftUI's
+    /// Observation can see writes to on its own, so button views read this
+    /// counter (via `resolvedIcon`) to know to re-fetch instead.
+    private(set) var iconOverrideVersion = 0
+
+    /// The icon a task/launcher/grouped button should actually draw: a
+    /// custom override if one's been assigned, otherwise `fallback` (the
+    /// app's own icon, however that button normally resolves it).
+    func resolvedIcon(bundleIdentifier: String?, fallback: NSImage?) -> NSImage? {
+        _ = iconOverrideVersion
+        return IconOverrideStore.customIcon(for: bundleIdentifier) ?? fallback
+    }
+
+    /// Presents a plain `NSOpenPanel` (synchronous, needs no SwiftUI state
+    /// of its own) for the user to pick a replacement image, and stores it
+    /// as that app's custom icon if they choose one.
+    func presentIconPicker(for bundleIdentifier: String?) {
+        guard let bundleIdentifier else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = L("icon_picker.title")
+
+        // This app runs as an accessory (`.accessory`, no Dock icon, never
+        // the "active app") so its own always-on-top bar behaves like a
+        // real taskbar — but that's also why the panel's sidebar (Favoris,
+        // iCloud Drive, …) didn't respond to clicks at all: an accessory
+        // app's modal panel never properly becomes the active app's own
+        // key window, which the sidebar's click handling apparently needs,
+        // even though the main file grid worked fine regardless. Briefly
+        // going `.regular` for just this panel's lifetime fixes that
+        // without changing how the app behaves the rest of the time.
+        let previousPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        defer { NSApp.setActivationPolicy(previousPolicy) }
+
+        guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
+        IconOverrideStore.setCustomIcon(image, for: bundleIdentifier)
+        iconOverrideVersion += 1
+    }
+
+    func hasCustomIcon(bundleIdentifier: String?) -> Bool {
+        _ = iconOverrideVersion
+        return IconOverrideStore.customIcon(for: bundleIdentifier) != nil
+    }
+
+    func restoreOriginalIcon(for bundleIdentifier: String?) {
+        guard let bundleIdentifier else { return }
+        IconOverrideStore.removeCustomIcon(for: bundleIdentifier)
+        iconOverrideVersion += 1
+    }
 
     /// System UI surfaces (Spotlight's search overlay, etc.) sometimes show
     /// up as a regular, windowed process, but aren't "apps" someone would
@@ -84,7 +178,7 @@ final class WindowManager {
         var result: [TaskbarEntry] = []
         var consumedWindowIDs = Set<String>()
 
-        for pinned in pinnedApps {
+        for pinned in orderedPinnedApps {
             let matches = windows.filter { $0.bundleIdentifier != nil && $0.bundleIdentifier == pinned.bundleIdentifier }
             if matches.isEmpty {
                 result.append(.launcher(pinned))
@@ -181,27 +275,43 @@ final class WindowManager {
         }
     }
 
-    /// Drag-and-drop reordering of taskbar icons, synced with the real
-    /// Dock: moves `draggedBundleIdentifier` to sit at
-    /// `droppedOnBundleIdentifier`'s position among everything currently
-    /// shown in the taskbar. Anything touched by the drag that wasn't
-    /// already pinned becomes pinned — only pinned apps have a persistent
-    /// position, so that's the only way a manual reorder can "stick".
+    /// Drag-and-drop reordering of taskbar icons — a pure in-memory preview
+    /// (`pendingIconOrder`) while `isEditingIcons` is on; nothing reaches
+    /// the real Dock until edit mode actually ends (`commitPendingIconOrder`).
+    /// Moves `draggedBundleIdentifier` to sit at `droppedOnBundleIdentifier`'s
+    /// position among everything currently shown in the taskbar. Anything
+    /// touched by the drag that wasn't already pinned becomes pinned once
+    /// committed — only pinned apps have a persistent position, so that's
+    /// the only way a manual reorder can "stick".
     func reorder(draggedBundleIdentifier: String, droppedOnBundleIdentifier: String) {
         guard draggedBundleIdentifier != droppedOnBundleIdentifier else { return }
 
         var order = currentEntryBundleIdentifiers()
-        guard let fromIndex = order.firstIndex(of: draggedBundleIdentifier) else { return }
+        guard let fromIndex = order.firstIndex(of: draggedBundleIdentifier),
+              let originalTargetIndex = order.firstIndex(of: droppedOnBundleIdentifier) else { return }
+        // Dragging onto the item immediately to your right, then always
+        // inserting *before* the target, is a no-op for that one specific
+        // case — the dragged item was already sitting right before it.
+        // Whether the drag moved forward or backward decides which side of
+        // the (now-shifted) target to land on instead, so an adjacent swap
+        // actually swaps regardless of direction.
+        let movingForward = fromIndex < originalTargetIndex
+
         order.remove(at: fromIndex)
         guard let toIndex = order.firstIndex(of: droppedOnBundleIdentifier) else { return }
-        order.insert(draggedBundleIdentifier, at: toIndex)
+        let insertionIndex = movingForward ? toIndex + 1 : toIndex
+        order.insert(draggedBundleIdentifier, at: insertionIndex)
 
-        applyOrder(order)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            pendingIconOrder = order
+        }
     }
 
     /// Every taskbar entry's bundle identifier, in the order they're
     /// currently shown (pinned launchers first in Dock order, then any
-    /// other running app) — the ordering a drag operates on.
+    /// other running app) — the ordering a drag operates on. Reflects
+    /// `pendingIconOrder` automatically, since `entries` (what this reads)
+    /// is itself built from `orderedPinnedApps`.
     private func currentEntryBundleIdentifiers() -> [String] {
         var seen = Set<String>()
         var order: [String] = []
@@ -220,21 +330,39 @@ final class WindowManager {
         return order
     }
 
-    /// Rewrites the Dock's pinned-apps list to exactly this order,
-    /// resolving each identifier's app bundle from whichever is running or
-    /// already pinned right now.
-    private func applyOrder(_ bundleIdentifiers: [String]) {
-        var newOrder: [PinnedApp] = []
+    /// `pinnedApps` in `pendingIconOrder`'s order when a drag preview is
+    /// active, otherwise just `pinnedApps` unchanged — what `entries`
+    /// actually renders from. Built with the exact same resolution
+    /// `applyOrder` uses to write to disk (a bundle identifier is either
+    /// already pinned, or a currently-running app being pinned for the
+    /// first time by this drag), so the live preview always looks exactly
+    /// like what committing it will produce.
+    private var orderedPinnedApps: [PinnedApp] {
+        guard let pendingIconOrder else { return pinnedApps }
+        return Self.resolvePinnedApps(for: pendingIconOrder, existingPinned: pinnedApps)
+    }
+
+    private static func resolvePinnedApps(for bundleIdentifiers: [String], existingPinned: [PinnedApp]) -> [PinnedApp] {
+        var resolved: [PinnedApp] = []
         for bundleIdentifier in bundleIdentifiers {
-            if let existing = pinnedApps.first(where: { $0.bundleIdentifier == bundleIdentifier }) {
-                newOrder.append(existing)
+            if let existing = existingPinned.first(where: { $0.bundleIdentifier == bundleIdentifier }) {
+                resolved.append(existing)
             } else if let running = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }),
                       let url = running.bundleURL {
                 let name = running.localizedName ?? url.deletingPathExtension().lastPathComponent
-                newOrder.append(PinnedApp(url: url, displayName: name, bundleIdentifier: bundleIdentifier, rawEntry: nil))
+                resolved.append(PinnedApp(url: url, displayName: name, bundleIdentifier: bundleIdentifier, rawEntry: nil))
             }
         }
-        DockPinnedAppsStore.reorder(to: newOrder)
+        return resolved
+    }
+
+    /// Writes `pendingIconOrder` (if any drag actually happened this edit
+    /// session) to the real Dock, exactly once — called from
+    /// `isEditingIcons`'s own `didSet` when edit mode ends.
+    private func commitPendingIconOrder() {
+        guard let pendingIconOrder else { return }
+        self.pendingIconOrder = nil
+        DockPinnedAppsStore.reorder(to: Self.resolvePinnedApps(for: pendingIconOrder, existingPinned: pinnedApps))
         refreshPinnedApps()
     }
 
@@ -473,6 +601,7 @@ final class WindowManager {
     }
 
     func launch(_ pinned: PinnedApp) {
+        LaunchHistoryStore.recordLaunch(bundleIdentifier: pinned.bundleIdentifier)
         // Finder is always running (it owns the desktop), so treating it
         // like any other "closed" app and just activating it wouldn't open
         // a window — open one explicitly instead.

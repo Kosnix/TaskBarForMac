@@ -79,6 +79,7 @@ final class TaskbarPanel: NSPanel {
         let container = TaskbarContainerView(frame: NSRect(origin: .zero, size: screenFrame.size))
         container.autoresizesSubviews = true
         container.themeStore = themeStore
+        container.windowManager = windowManager
 
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = container.bounds

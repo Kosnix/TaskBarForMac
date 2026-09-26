@@ -1,48 +1,25 @@
-import CoreTransferable
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Drag payload for reordering taskbar icons. In-process only (drag source
-/// and drop target are both this app), so an ad-hoc, unregistered UTType is
-/// fine — it doesn't need to be recognized system-wide.
-struct TaskDragItem: Codable, Transferable {
-    let bundleIdentifier: String
-
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .taskbarItem)
-    }
-}
-
-extension UTType {
-    static let taskbarItem = UTType(exportedAs: "dev.nikos.taskbarreplacement.taskitem")
-}
-
-private struct TaskDraggable: ViewModifier {
-    let bundleIdentifier: String?
-
-    func body(content: Content) -> some View {
-        if let bundleIdentifier {
-            content.draggable(TaskDragItem(bundleIdentifier: bundleIdentifier))
-        } else {
-            content
-        }
-    }
-}
-
-/// Handles everything a taskbar icon can receive as a drop target, through
-/// one `DropDelegate` instead of layering SwiftUI's `.dropDestination` (for
-/// reordering) and `.onDrop` (for file-drag spring loading) on the same
-/// view — the two didn't coexist properly (only one actually received
-/// drops), which is why file drags weren't triggering spring-loading on
-/// app icons even though it worked fine on the plain-`.onDrop` minimize
-/// button.
-private struct TaskDropDelegate: DropDelegate {
-    let bundleIdentifier: String?
+/// Dock-style "spring loading": hovering a drag of files from another app
+/// over a taskbar icon for half a second runs `onSpringLoad` (typically
+/// raising the corresponding window/app, or minimizing everything for the
+/// "show desktop" button). Dropping an actual `.app` bundle instead pins it
+/// — the same as dragging it onto the real Dock does.
+///
+/// Icon-to-icon reordering doesn't go through here — see
+/// `IconPressGesture.swift`'s `PressAndHoldView`, which does that directly
+/// (comparing the live drag point against `WindowManager.iconFrames`)
+/// instead of SwiftUI's `.draggable`/`.onDrop`: the two systems were
+/// fighting over the same mouse-down/mouse-up sequence, which is what kept
+/// reordering from ever actually working once this app also needed its own
+/// raw tap/long-press detector for reliability.
+private struct SpringLoadDropDelegate: DropDelegate {
     let windowManager: WindowManager
     let onSpringLoad: (() -> Void)?
 
     func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.taskbarItem]) || info.hasItemsConforming(to: [.fileURL])
+        info.hasItemsConforming(to: [.fileURL])
     }
 
     func dropEntered(info: DropInfo) {
@@ -56,30 +33,48 @@ private struct TaskDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        guard let bundleIdentifier, info.hasItemsConforming(to: [.taskbarItem]) else { return false }
-        let providers = info.itemProviders(for: [.taskbarItem])
-        guard let provider = providers.first else { return false }
-        _ = provider.loadDataRepresentation(for: .taskbarItem) { data, _ in
-            guard let data, let item = try? JSONDecoder().decode(TaskDragItem.self, from: data) else { return }
-            DispatchQueue.main.async {
-                windowManager.reorder(draggedBundleIdentifier: item.bundleIdentifier, droppedOnBundleIdentifier: bundleIdentifier)
-            }
-        }
-        return true
+        pinDroppedApplications(info.itemProviders(for: [.fileURL]), windowManager: windowManager)
     }
 }
 
+/// Resolves each provider's file URL (async — `NSItemProvider` never hands
+/// one over synchronously) and pins whichever ones are `.app` bundles.
+/// Returns whether any provider was even worth trying, not whether a pin
+/// actually happened yet — matching how `DropDelegate.performDrop`/`onDrop`
+/// are meant to be used (return `true` to claim the drop before the async
+/// work resolves).
+@discardableResult
+private func pinDroppedApplications(_ providers: [NSItemProvider], windowManager: WindowManager) -> Bool {
+    guard !providers.isEmpty else { return false }
+    for provider in providers {
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url, url.pathExtension == "app" else { return }
+            DispatchQueue.main.async {
+                let displayName = Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+                    ?? Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleName") as? String
+                    ?? url.deletingPathExtension().lastPathComponent
+                windowManager.pin(url: url, displayName: displayName)
+            }
+        }
+    }
+    return true
+}
+
 extension View {
-    /// Drag-to-reorder among taskbar icons (synced with the real Dock's
-    /// pinned-apps order — see `WindowManager.reorder`) and, optionally,
-    /// Dock-style "spring loading": hovering a drag of files from another
-    /// app over this icon for half a second runs `onSpringLoad` (typically
-    /// raising the corresponding window/app, or minimizing everything for
-    /// the "show desktop" button). Reordering is a no-op without a
-    /// `bundleIdentifier` (e.g. a non-bundled executable) — dragging still
-    /// works, spring loading just does its own thing.
+    /// Dock-style "spring loading" + drop-to-pin for file drags from other
+    /// apps — see `SpringLoadDropDelegate`. `bundleIdentifier` is unused
+    /// now (kept so call sites don't need to change); icon-to-icon
+    /// reordering lives in `IconPressGesture.swift` instead.
     func taskReorderable(bundleIdentifier: String?, windowManager: WindowManager, onSpringLoad: (() -> Void)? = nil) -> some View {
-        modifier(TaskDraggable(bundleIdentifier: bundleIdentifier))
-            .onDrop(of: [.taskbarItem, .fileURL], delegate: TaskDropDelegate(bundleIdentifier: bundleIdentifier, windowManager: windowManager, onSpringLoad: onSpringLoad))
+        onDrop(of: [.fileURL], delegate: SpringLoadDropDelegate(windowManager: windowManager, onSpringLoad: onSpringLoad))
+    }
+
+    /// Dropping an app from Finder onto empty taskbar background pins it,
+    /// the same as `taskReorderable` already does when the drop lands
+    /// directly on an existing icon instead.
+    func pinsDroppedApplications(windowManager: WindowManager) -> some View {
+        onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            pinDroppedApplications(providers, windowManager: windowManager)
+        }
     }
 }

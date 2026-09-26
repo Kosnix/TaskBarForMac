@@ -5,8 +5,15 @@
 
 /* Personalization menu */
 "menu.settings" = "Ajustes…";
+"menu.edit_icons" = "Modo edición";
 "menu.theme" = "Tema";
 "menu.bar_size" = "Tamaño de la barra";
+"settings.icon_size" = "Tamaño de los iconos";
+"settings.icon_spacing" = "Espaciado de los iconos";
+"account.open_settings" = "Abrir los ajustes de la cuenta de Apple";
+"icon_picker.title" = "Elegir un nuevo icono";
+"icon_edit.done" = "Listo";
+"icon_edit.restore_original" = "Restaurar icono original";
 "menu.open_apps" = "Aplicaciones abiertas";
 "menu.liquid_glass" = "Fondo de vidrio líquido";
 "menu.liquid_glass_intensity" = "Intensidad del vidrio líquido";
@@ -39,10 +46,18 @@
 "settings.start_menu_style" = "Estilo";
 "settings.start_menu_style.kickoff" = "Kickoff";
 "settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
 "start.pinned" = "Anclado";
 "start.all_apps" = "Todas las aplicaciones";
+"start.all_programs" = "Todos los programas";
 "start.search_results" = "Resultados de la búsqueda";
+"start.documents" = "Documentos";
+"start.pictures" = "Imágenes";
+"start.music" = "Música";
+"start.downloads" = "Descargas";
+"start.computer" = "Equipo";
+"start.control_panel" = "Panel de control";
 
 /* Taskbar */
 "accessibility.prompt" = "Permitir el acceso de Accesibilidad para gestionar ventanas →";

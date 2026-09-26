@@ -7,12 +7,17 @@ import AppKit
 /// This just offers a way in, plus the one thing that still makes sense as
 /// an instant, no-window action.
 enum PersonalizationMenuBuilder {
-    static func build(themeStore: ThemeStore) -> NSMenu {
+    static func build(themeStore: ThemeStore, windowManager: WindowManager? = nil) -> NSMenu {
         let menu = NSMenu()
 
         menu.addItem(ClosureMenuItem(title: L("menu.settings")) {
             SettingsWindowManager.show(themeStore: themeStore)
         })
+        if let windowManager {
+            menu.addItem(ClosureMenuItem(title: L("menu.edit_icons")) {
+                windowManager.isEditingIcons = true
+            })
+        }
         menu.addItem(.separator())
         menu.addItem(ClosureMenuItem(title: L("menu.quit")) {
             NSApp.terminate(nil)

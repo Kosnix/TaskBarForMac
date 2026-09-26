@@ -20,13 +20,17 @@ Personal project, not affiliated with KDE or Microsoft — just inspired by thei
 
 ## Features
 
-- **Taskbar**: open windows' icons (grouped when an app has several), pinning apps, drag-and-drop reordering, minimize-all, clock (with an optional date), trash.
+- **Taskbar**: open windows' icons (grouped when an app has several), pinning apps, minimize-all, clock (with an optional date), trash.
+- **Icon editing**: press and hold any icon (or right-click the bar → **Edit Mode**) to make every icon jiggle, iOS-style — while in that mode you can drag icons to reorder them (live preview, only written to the real Dock once you're done), tap an icon to give it a custom picture, and drag an app straight from Finder onto the bar to pin it.
+- **Icon size & spacing**: both adjustable as a percentage, independent of the bar's own height.
 - **Alignment**: icons left-aligned, centered, or centered together with the start button.
 - **Auto-hide**: the bar can retract automatically, like on Windows.
 - **Start menu**, pick one:
   - **Kickoff** (Plasma-style): search, categories, app grid.
   - **Windows 11**: search, pinned or full app grid.
+  - **Windows 7**: pinned/all-programs list sorted by most recently launched, account photo, quick links.
   - **Spotlight**: opens the real macOS Spotlight directly, no UI of its own.
+  - Every style shows your real macOS account picture and is fully keyboard-navigable (arrows + Enter), and its picture opens **System Settings → Apple Account** when clicked.
 - **Themes**: Breeze (light/dark), macOS, Windows 7, Windows 10, Windows 11, Windows XP — each with an independent Light / Dark / Automatic (follows the system) mode, separate from the theme choice itself.
 - **Liquid Glass**: translucent background with adjustable intensity.
 - **Multilingual**: French, English, Spanish, Russian (or follows the system language).

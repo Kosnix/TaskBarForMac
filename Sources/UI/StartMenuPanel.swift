@@ -103,6 +103,7 @@ final class StartMenuPanel: NSPanel {
         // actual height, not the theme's nominal one.
         var theme = themeStore.activeTheme ?? ThemeLoader.loadAllThemes()[0]
         theme.tokens.panel.height = themeStore.effectivePanelHeight
+        theme.tokens.taskbarIconRatio = themeStore.taskbarIconRatio
         let onLaunch: () -> Void = { [weak state] in state?.isPresented = false }
 
         switch themeStore.startMenuStyle {
@@ -122,6 +123,16 @@ final class StartMenuPanel: NSPanel {
             ))
         case .windows11:
             return AnyView(Windows11StartMenuView(
+                appDiscovery: appDiscovery,
+                windowManager: windowManager,
+                theme: theme,
+                state: state,
+                liquidGlassEnabled: themeStore.liquidGlassEnabled,
+                liquidGlassIntensity: themeStore.liquidGlassIntensity,
+                onLaunch: onLaunch
+            ))
+        case .windows7:
+            return AnyView(Windows7StartMenuView(
                 appDiscovery: appDiscovery,
                 windowManager: windowManager,
                 theme: theme,

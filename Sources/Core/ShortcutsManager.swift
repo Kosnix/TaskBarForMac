@@ -9,6 +9,14 @@ import AppKit
 /// Defaults: ⌘ alone = toggle start menu (like Meta/Win on
 /// KDE/Windows — there's no literal Super key on a Mac keyboard, so ⌘ is
 /// the closest analog), ⌘⌥D = minimize all, ⌘⌥1…9 = focus the Nth window.
+///
+/// The start-menu toggle also answers to ⌃⌥Space rather than ⌘⌥Space:
+/// that combination is macOS's own default systemwide shortcut for
+/// "Show Finder search window", and an `NSEvent` global monitor can only
+/// *observe* a keystroke, never consume it — so binding ⌘⌥Space here
+/// left every toggle opening a real Finder search window right alongside
+/// our own menu, with no way for this monitor-based approach to stop it.
+/// ⌃⌥Space isn't claimed by any macOS default shortcut.
 final class ShortcutsManager {
     private let windowManager: WindowManager
     private var onToggleStartMenu: (() -> Void)?
@@ -18,11 +26,13 @@ final class ShortcutsManager {
     private var localFlagsMonitor: Any?
 
     private static let requiredModifiers: NSEvent.ModifierFlags = [.command, .option]
+    private static let startMenuModifiers: NSEvent.ModifierFlags = [.control, .option]
 
     /// macOS virtual key codes (US ANSI layout) for the keys we bind.
     private enum KeyCode {
         static let d: UInt16 = 0x02
         static let space: UInt16 = 0x31
+        static let escape: UInt16 = 0x35
         static let digits: [UInt16] = [0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19] // 1...9
     }
 
@@ -80,16 +90,27 @@ final class ShortcutsManager {
             commandWasCombined = true
         }
 
-        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == Self.requiredModifiers else {
+        // No modifier needed — plain Escape, only while the icon-edit
+        // "jiggle" mode (see `WindowManager.isEditingIcons`) is actually on,
+        // so this never swallows an Escape meant for something else.
+        if event.keyCode == KeyCode.escape, windowManager.isEditingIcons {
+            windowManager.isEditingIcons = false
+            return true
+        }
+
+        let activeModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        if activeModifiers == Self.startMenuModifiers, event.keyCode == KeyCode.space {
+            onToggleStartMenu?()
+            return true
+        }
+
+        guard activeModifiers == Self.requiredModifiers else {
             return false
         }
 
         if event.keyCode == KeyCode.d {
             windowManager.minimizeAll()
-            return true
-        }
-        if event.keyCode == KeyCode.space {
-            onToggleStartMenu?()
             return true
         }
         if let index = KeyCode.digits.firstIndex(of: event.keyCode) {

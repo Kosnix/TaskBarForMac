@@ -22,7 +22,7 @@ struct Windows11StartMenuView: View {
     /// Windows 11's own Start menu icons read noticeably larger than its
     /// taskbar's — twice the size of this bar's own icons, by explicit
     /// request, rather than matching them like the Kickoff layout does.
-    private var iconSize: CGFloat { max(12, tokens.panel.height - 16) * 2 }
+    private var iconSize: CGFloat { tokens.taskbarIconSize * 2 }
 
     /// A single grid cell's app, whichever list it came from — unifies
     /// `PinnedApp` (the default, empty-search view) and `InstalledApp`
@@ -89,12 +89,20 @@ struct Windows11StartMenuView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader
-                    appGrid
+            ScrollViewReader { proxy in
+                ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeader
+                        appGrid
+                    }
+                    .padding(20)
                 }
-                .padding(20)
+                .onChange(of: state.selectedIndex) { _, newIndex in
+                    guard displayedApps.indices.contains(newIndex) else { return }
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        proxy.scrollTo(displayedApps[newIndex].id, anchor: .center)
+                    }
+                }
             }
             Divider()
             footer
@@ -105,9 +113,32 @@ struct Windows11StartMenuView: View {
         // Only the top corners — the bottom edge sits flush against the
         // taskbar, so rounding it too would leave a visible gap/seam there.
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: Self.topCornerRadius, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: Self.topCornerRadius))
+        .onAppear {
+            state.selectedIndex = 0
+            state.focusedRegion = .grid
+        }
     }
 
     private static let topCornerRadius: CGFloat = 10
+
+    private func moveSelection(_ direction: TextFieldNavigation) {
+        let count = displayedApps.count
+        guard count > 0 else { return }
+        let columns = Self.columnCount
+        var next = state.selectedIndex
+        switch direction {
+        case .up: next -= columns
+        case .down: next += columns
+        case .left: next -= 1
+        case .right: next += 1
+        }
+        state.selectedIndex = min(max(0, next), count - 1)
+    }
+
+    private func launchSelected() {
+        guard displayedApps.indices.contains(state.selectedIndex) else { return }
+        launch(displayedApps[state.selectedIndex])
+    }
 
     private var searchField: some View {
         HStack(spacing: 8) {
@@ -116,22 +147,15 @@ struct Windows11StartMenuView: View {
                 placeholder: L("search.placeholder"),
                 text: Binding(get: { state.query }, set: { state.query = $0 }),
                 textColor: NSColor(Color(hex: tokens.colors.textPrimary)),
+                accentColor: NSColor(Color(hex: tokens.colors.accent)),
                 fontSize: tokens.typography.fontSize,
-                onNavigate: nil,
-                onSubmit: launchFirstResult
+                onNavigate: { direction in moveSelection(direction) },
+                onSubmit: launchSelected
             )
             .frame(height: 20)
         }
         .padding(10)
-        // A flat `buttonBackground` fill read as plain, unthemed grey in
-        // most themes (that token is a neutral, not an expressive color) —
-        // layering a light wash of the theme's own accent color on top
-        // makes it visibly "this theme's" search field instead.
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(hex: tokens.colors.buttonBackground))
-                .overlay(RoundedRectangle(cornerRadius: 8).fill(Color(hex: tokens.colors.accent).opacity(0.18)))
-        )
+        .background(SearchFieldBackground(tokens: tokens))
         .padding(16)
     }
 
@@ -159,18 +183,20 @@ struct Windows11StartMenuView: View {
 
     private var appGrid: some View {
         LazyVGrid(columns: gridColumns, spacing: 16) {
-            ForEach(displayedApps) { app in
-                appCell(app)
+            ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, app in
+                appCell(app, isSelected: index == state.selectedIndex)
+                    .id(app.id)
             }
         }
     }
 
-    private func appCell(_ app: DisplayApp) -> some View {
+    private func appCell(_ app: DisplayApp, isSelected: Bool) -> some View {
         Button {
+            state.selectedIndex = displayedApps.firstIndex(where: { $0.id == app.id }) ?? state.selectedIndex
             launch(app)
         } label: {
             VStack(spacing: 4) {
-                Image(nsImage: app.icon)
+                Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
                 Text(app.displayName)
@@ -179,7 +205,12 @@ struct Windows11StartMenuView: View {
                     .frame(width: iconSize + 20)
             }
             .padding(6)
+            .background(isSelected ? Color(hex: tokens.colors.buttonBackgroundActive).opacity(0.3) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Color(hex: tokens.colors.accent), lineWidth: isSelected ? 2 : 0)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -197,39 +228,49 @@ struct Windows11StartMenuView: View {
         case .pinned(let pinned):
             windowManager.launch(pinned)
         case .installed(let installed):
+            LaunchHistoryStore.recordLaunch(bundleIdentifier: installed.bundleIdentifier)
             NSWorkspace.shared.openApplication(at: installed.url, configuration: NSWorkspace.OpenConfiguration())
         }
         onLaunch()
     }
 
-    private func launchFirstResult() {
-        guard let first = displayedApps.first else { return }
-        launch(first)
-    }
 
     private var footer: some View {
         HStack {
             HStack(spacing: 8) {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 20))
+                Button(action: AppleAccountSettings.open) {
+                    Group {
+                        if let photo = AccountPhoto.current() {
+                            Image(nsImage: photo)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 20, height: 20)
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 20))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help(L("account.open_settings"))
                 Text(NSFullUserName())
                     .font(.system(size: tokens.typography.fontSize))
             }
             Spacer()
-            Menu {
-                Button(L("session.lock"), action: SessionManager.lockScreen)
-                Button(L("session.sleep"), action: SessionManager.sleep)
-                Divider()
-                Button(L("session.logout"), action: SessionManager.logOut)
-                Button(L("session.restart"), action: SessionManager.restart)
-                Button(L("session.shutdown"), action: SessionManager.shutDown)
-            } label: {
-                Image(systemName: "power")
-                    .font(.system(size: 16))
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 24)
+            NativeMenuButton(systemImage: "power", size: 16, tintColor: Color(hex: tokens.colors.textPrimary), makeMenu: sessionMenu)
         }
         .padding(12)
+    }
+
+    private func sessionMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(ClosureMenuItem(title: L("session.lock"), handler: SessionManager.lockScreen))
+        menu.addItem(ClosureMenuItem(title: L("session.sleep"), handler: SessionManager.sleep))
+        menu.addItem(.separator())
+        menu.addItem(ClosureMenuItem(title: L("session.logout"), handler: SessionManager.logOut))
+        menu.addItem(ClosureMenuItem(title: L("session.restart"), handler: SessionManager.restart))
+        menu.addItem(ClosureMenuItem(title: L("session.shutdown"), handler: SessionManager.shutDown))
+        return menu
     }
 }

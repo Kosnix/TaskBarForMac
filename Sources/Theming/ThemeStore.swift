@@ -41,6 +41,11 @@ enum StartMenuStyle: String, CaseIterable {
     /// taskbar-pinned apps under "Épinglé" with a toggle to show every
     /// discovered app instead, an account-name/power-button footer.
     case windows11
+    /// Windows 7's Start menu: a two-column layout — a plain list of
+    /// pinned programs (switchable to "All Programs") with a search field
+    /// on the left, an account picture and quick folder/system links on
+    /// the right, and a split Shut Down button at the bottom.
+    case windows7
     /// Opens the real, system Spotlight instead of any menu this app draws
     /// itself — see `SpotlightTrigger`.
     case realSpotlight
@@ -242,6 +247,32 @@ final class ThemeStore {
         }
     }
 
+    private static let taskbarIconRatioKey = "TB.taskbar.iconRatio"
+
+    /// How large a task/launcher button's icon is, as a fraction of the
+    /// panel's own height — the slider in the personalization menu. Applied
+    /// the same way `effectivePanelHeight`/`effectiveTaskDisplayStyle` are:
+    /// baked into a mutable copy of `theme.tokens` right before it's handed
+    /// to the icon-drawing views (see `TaskbarView.content(for:)` and
+    /// `StartMenuPanel`), rather than threaded through every small view
+    /// individually.
+    var taskbarIconRatio: Double {
+        didSet {
+            UserDefaults.standard.set(taskbarIconRatio, forKey: Self.taskbarIconRatioKey)
+        }
+    }
+
+    private static let taskbarIconSpacingRatioKey = "TB.taskbar.iconSpacingRatio"
+
+    /// How much room sits between task/launcher buttons, as a fraction of
+    /// the icon's own size — same slider pattern and application point as
+    /// `taskbarIconRatio` just above.
+    var taskbarIconSpacingRatio: Double {
+        didSet {
+            UserDefaults.standard.set(taskbarIconSpacingRatio, forKey: Self.taskbarIconSpacingRatioKey)
+        }
+    }
+
     private static let startMenuWidthOverrideKey = "TB.startMenu.widthOverride"
     private static let startMenuHeightOverrideKey = "TB.startMenu.heightOverride"
 
@@ -384,6 +415,16 @@ final class ThemeStore {
             liquidGlassIntensity = storedIntensity
         } else {
             liquidGlassIntensity = 0.35
+        }
+        if let storedRatio = UserDefaults.standard.object(forKey: Self.taskbarIconRatioKey) as? Double {
+            taskbarIconRatio = storedRatio
+        } else {
+            taskbarIconRatio = ThemeTokens.defaultTaskbarIconRatio
+        }
+        if let storedSpacingRatio = UserDefaults.standard.object(forKey: Self.taskbarIconSpacingRatioKey) as? Double {
+            taskbarIconSpacingRatio = storedSpacingRatio
+        } else {
+            taskbarIconSpacingRatio = ThemeTokens.defaultTaskbarIconSpacingRatio
         }
         languageOverride = Localization.languageOverride
         if let storedWidth = UserDefaults.standard.object(forKey: Self.startMenuWidthOverrideKey) as? Double,

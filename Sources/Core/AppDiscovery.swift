@@ -38,6 +38,9 @@ final class AppDiscovery {
         URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app")
     ]
 
+    private var directoryWatchers: [DispatchSourceFileSystemObject] = []
+    private var rescanWorkItem: DispatchWorkItem?
+
     func loadInBackground() {
         Task.detached(priority: .utility) { [weak self] in
             let found = Self.scan()
@@ -46,6 +49,40 @@ final class AppDiscovery {
                 self.apply(found)
             }
         }
+        if directoryWatchers.isEmpty {
+            startWatchingForChanges()
+        }
+    }
+
+    /// Installing or removing an app changes one of `standardDirectories`'
+    /// own contents — without this, a freshly installed app just never
+    /// showed up in the start menu until the bar itself was relaunched.
+    /// Same debounced-file-watcher approach `ThemeStore` already uses for
+    /// its theme folder, just watching directory *listings* instead of a
+    /// single file's contents.
+    private func startWatchingForChanges() {
+        for directory in Self.standardDirectories {
+            let fd = open(directory.path, O_EVTONLY)
+            guard fd >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write], queue: .main)
+            source.setEventHandler { [weak self] in self?.scheduleRescan() }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            directoryWatchers.append(source)
+        }
+    }
+
+    /// Debounced: installing an app (unzip, drag-copy, an installer package)
+    /// can touch its directory several times in a row as it writes — this
+    /// waits for things to settle instead of rescanning on every single
+    /// event.
+    private func scheduleRescan() {
+        rescanWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.loadInBackground()
+        }
+        rescanWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
     /// Moves an app to the Trash (reversible, like Launchpad's own "Delete

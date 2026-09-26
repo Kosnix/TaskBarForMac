@@ -8,13 +8,14 @@ import AppKit
 /// claimed it, i.e. exactly when the click landed on empty bar background.
 final class TaskbarContainerView: NSView {
     var themeStore: ThemeStore?
+    var windowManager: WindowManager?
 
     override func rightMouseDown(with event: NSEvent) {
         guard let themeStore else {
             super.rightMouseDown(with: event)
             return
         }
-        let menu = PersonalizationMenuBuilder.build(themeStore: themeStore)
+        let menu = PersonalizationMenuBuilder.build(themeStore: themeStore, windowManager: windowManager)
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 }

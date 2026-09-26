@@ -25,14 +25,15 @@ struct TaskButtonView: View {
     /// Icon fills most of the button's height, which itself tracks the
     /// panel height — so icons scale up automatically when the panel is
     /// resized instead of staying a fixed, disproportionately small size.
-    private var iconSize: CGFloat { max(12, tokens.panel.height - 16) }
+    private var iconSize: CGFloat { tokens.taskbarIconSize }
 
     var body: some View {
         HStack(spacing: 6) {
-            if let icon = window.appIcon {
+            if let icon = windowManager.resolvedIcon(bundleIdentifier: window.bundleIdentifier, fallback: window.appIcon) {
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
+                    .wiggle(isActive: windowManager.isEditingIcons, seed: window.id.hashValue)
             }
             if showLabel {
                 Text(window.title)
@@ -42,7 +43,7 @@ struct TaskButtonView: View {
                     .truncationMode(.tail)
             }
         }
-        .padding(.horizontal, tokens.spacing.edgePadding)
+        .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
         // Left-aligned, not the default center — see `GroupedTaskButtonView`
         // for why this specific change matters (a wide allocated `width`
         // with modest content otherwise leaves empty space before the icon
@@ -61,31 +62,46 @@ struct TaskButtonView: View {
         // vertical position is pinned to the button's bottom edge only.
         .overlay(alignment: .bottomLeading) {
             minimizedDot
-                .offset(x: tokens.spacing.edgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
+                .offset(x: tokens.effectiveTaskbarEdgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
         }
         .overlay(activeUnderline, alignment: .bottom)
         .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
         .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
         .onHover { isHovering in
             windowManager.hoveredWindowID = isHovering ? window.id : (windowManager.hoveredWindowID == window.id ? nil : windowManager.hoveredWindowID)
         }
         .contextMenu {
-            Button(window.isMinimized ? L("window.restore") : L("window.minimize")) {
-                windowManager.toggleMinimize(window)
+            // Not while editing icons — the same reason a left-click stops
+            // minimizing/raising in this mode: jiggling is for
+            // rearranging/re-skinning icons, not controlling windows.
+            if !windowManager.isEditingIcons {
+                Button(window.isMinimized ? L("window.restore") : L("window.minimize")) {
+                    windowManager.toggleMinimize(window)
+                }
+                Button(L("window.close")) {
+                    windowManager.close(window)
+                }
+                Divider()
             }
-            Button(L("window.close")) {
-                windowManager.close(window)
-            }
-            Divider()
             Button(windowManager.isPinned(bundleIdentifier: window.bundleIdentifier) ? L("taskbar.unpin") : L("taskbar.pin")) {
                 windowManager.togglePin(pid: window.pid, bundleIdentifier: window.bundleIdentifier, displayName: window.appName)
+            }
+            if windowManager.isEditingIcons, windowManager.hasCustomIcon(bundleIdentifier: window.bundleIdentifier) {
+                Button(L("icon_edit.restore_original")) {
+                    windowManager.restoreOriginalIcon(for: window.bundleIdentifier)
+                }
             }
         }
         .help(showLabel ? "" : window.title)
         .taskReorderable(bundleIdentifier: window.bundleIdentifier, windowManager: windowManager) {
             windowManager.raise(window)
         }
+        // Last: this app's own raw-AppKit tap/long-press/drag overlay needs
+        // to sit on top of everything else here (`.taskReorderable`'s own
+        // `.onDrop` target especially) to actually receive left-clicks —
+        // see `IconPressGesture.swift`'s doc comment for why an earlier
+        // ordering silently ate every click before it ever reached this.
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: window.bundleIdentifier, onTap: onTap)
     }
 
     private var isHovered: Bool { windowManager.hoveredWindowID == window.id }
