@@ -28,6 +28,8 @@
     <true/>
     <key>NSAccessibilityUsageDescription</key>
     <string>Cette application a besoin de l'accès à l'Accessibilité pour lister, activer et minimiser les fenêtres des autres applications, à la place du Dock natif.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Cette application a besoin d'envoyer des évènements Apple à System Events pour verrouiller, redémarrer ou éteindre depuis le menu démarrer.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>UTExportedTypeDeclarations</key>

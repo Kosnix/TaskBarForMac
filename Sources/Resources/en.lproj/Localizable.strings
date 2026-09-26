@@ -4,31 +4,45 @@
 "button.cancel" = "Cancel";
 
 /* Personalization menu */
+"menu.settings" = "Settings…";
 "menu.theme" = "Theme";
 "menu.bar_size" = "Bar Size";
 "menu.open_apps" = "Open Applications";
 "menu.liquid_glass" = "Liquid Glass Background";
+"menu.liquid_glass_intensity" = "Liquid Glass Intensity";
+"menu.auto_hide" = "Automatically Hide the Taskbar";
 "menu.language" = "Language";
 "menu.quit" = "Quit Taskbar";
 "language.system" = "System ({lang})";
 
-"size.tiny" = "Tiny";
-"size.small" = "Small";
-"size.medium" = "Medium";
-"size.large" = "Large";
-"size.xlarge" = "Extra Large";
-"size.huge" = "Huge";
-"size.increase" = "Enlarge (+2px)";
-"size.decrease" = "Shrink (-2px)";
-"size.custom" = "Custom Size…";
-"size.hint" = "Tip: drag the bar's top edge to resize freely (22 to 160px).";
-
 "display.icon_and_label" = "Icon + Name";
 "display.icon_only" = "Icons Only";
 
-/* Custom size alert */
-"alert.custom_size.title" = "Custom Bar Size";
-"alert.custom_size.message" = "Height in pixels ({min} to {max}).";
+/* Settings window */
+"settings.window_title" = "Settings";
+"settings.color_scheme" = "Appearance Mode";
+"settings.color_scheme.light" = "Light";
+"settings.color_scheme.dark" = "Dark";
+"settings.color_scheme.system" = "Automatic";
+"settings.section.layout" = "Layout";
+"settings.alignment" = "Icon Alignment";
+"settings.alignment.left" = "Left-Aligned";
+"settings.alignment.center" = "Centered";
+"settings.alignment.center_with_start" = "Centered With the Start Button";
+"settings.section.clock" = "Clock";
+"settings.clock.show" = "Show Clock";
+"settings.clock.show_date" = "Show Date";
+"settings.section.appearance" = "Appearance";
+"settings.section.general" = "General";
+"settings.launch_at_login" = "Launch at Login";
+"settings.section.start_menu" = "Start Menu";
+"settings.start_menu_style" = "Style";
+"settings.start_menu_style.kickoff" = "Kickoff";
+"settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.spotlight" = "Spotlight";
+"start.pinned" = "Pinned";
+"start.all_apps" = "All Apps";
+"start.search_results" = "Search Results";
 
 /* Taskbar */
 "accessibility.prompt" = "Allow Accessibility access to manage windows →";
@@ -53,11 +67,14 @@
 "search.placeholder" = "Search for an application…";
 
 /* Start menu app grid */
+"alert.unpin.title" = "Unpin \"{name}\" from the taskbar?";
+"alert.unpin.message" = "The app will be removed from the taskbar and the Dock.";
 "app.trash" = "Move to Trash";
 "alert.trash_app.title" = "Delete \"{name}\"?";
 "alert.trash_app.message" = "The app will be moved to the Trash.";
 "alert.uninstall_failed.title" = "Couldn't delete \"{name}\"";
 "alert.uninstall_failed.message" = "This app may be protected by the system.\n{error}";
+
 
 /* Dock recovery */
 "alert.dock_recovery.title" = "The Dock Was Left Modified";

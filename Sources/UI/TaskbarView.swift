@@ -37,19 +37,31 @@ struct TaskbarView: View {
         var theme = originalTheme
         theme.tokens.panel.height = themeStore.effectivePanelHeight
         theme.tokens.taskButton.displayStyle = themeStore.effectiveTaskDisplayStyle
+        if !themeStore.clockEnabled {
+            // Strip it out of every zone up front, rather than just
+            // rendering nothing where it would go — that would still leave
+            // its slot's `itemSpacing` gap, and still reserve its estimated
+            // width out of the center zone's budget.
+            theme.layout.zones.left.removeAll { $0 == "clock" }
+            theme.layout.zones.center.removeAll { $0 == "clock" }
+            theme.layout.zones.right.removeAll { $0 == "clock" }
+        }
         let tokens = theme.tokens
 
         // One deterministic measurement of the panel's real width, instead
         // of nesting a second GeometryReader inside the HStack (that broke
         // vertical centering and let overflowing task buttons paint behind
         // the right zone instead of stopping at it).
-        // The start button and "Réduire tout" render outside the padded
-        // content, flush against the screen's leading/trailing edges — the
-        // minimize button is then reachable by throwing the mouse into the
-        // bottom-right corner, like a classic hot corner, instead of
-        // stopping a few points short of it, and the start button sits as
-        // far left as the screen allows, matching the same idea.
-        let hasFlushStartButton = theme.layout.zones.left.contains("start-button")
+        //
+        // "Centrer avec le menu démarrer" moves the start button out of its
+        // usual flush-left spot and into the centered group itself, so it
+        // travels to the middle of the bar together with the icons — only
+        // when the base centering option is also on, and only for a theme
+        // that actually puts "start-button" in the left zone to begin with.
+        let centerIncludesStart = themeStore.centerTaskListEnabled
+            && themeStore.centerIncludesStartButton
+            && theme.layout.zones.left.contains("start-button")
+        let hasFlushStartButton = theme.layout.zones.left.contains("start-button") && !centerIncludesStart
         let leftModules = theme.layout.zones.left.filter { $0 != "start-button" }
         let hasFlushMinimizeAll = theme.layout.zones.right.contains("minimize-all")
         let rightModules = theme.layout.zones.right.filter { $0 != "minimize-all" }
@@ -58,43 +70,54 @@ struct TaskbarView: View {
             ZStack {
                 background(tokens: tokens)
 
+                // The start button and "Réduire tout" are ordinary
+                // siblings in this same `HStack` now, not a separately
+                // positioned overlay reserving space via an *estimate* of
+                // their width — that estimate never quite matched their
+                // real rendered width (icon vs. actual glyph metrics,
+                // padding rounding, …), which is exactly what kept leaving
+                // a stray gap next to the start button no matter how the
+                // estimate was tuned. As ordinary siblings, the gap next to
+                // them is just `itemSpacing`, the same spacing every other
+                // pair of icons already uses — no estimate, so no possible
+                // mismatch. Reaching the true screen edge (clickable area
+                // included) still works: they're the first/last children
+                // with that side's padding dropped to 0, and each already
+                // sizes itself to the panel's full height.
                 HStack(spacing: tokens.spacing.itemSpacing) {
-                    zone(leftModules, theme: theme)
+                    if hasFlushStartButton {
+                        startButton(theme: theme)
+                    }
+                    // `HStack`'s `spacing` applies between *every* pair of
+                    // children it's given, even one that renders as
+                    // completely empty — with only "start-button" in the
+                    // left zone, `leftModules` is `[]`, but an empty
+                    // `zone(...)` would still be a real (zero-width) child
+                    // here, adding its own phantom `itemSpacing` gap.
+                    // Omitting it entirely when there's nothing in it
+                    // avoids that.
+                    if !leftModules.isEmpty {
+                        zone(leftModules, theme: theme)
+                    }
                     centerZone(
                         theme.layout.zones.center,
                         theme: theme,
-                        availableWidth: centerAvailableWidth(totalWidth: geometry.size.width, theme: theme)
+                        availableWidth: centerAvailableWidth(totalWidth: geometry.size.width, theme: theme, startButtonMovedToCenter: centerIncludesStart),
+                        includeStartButton: centerIncludesStart
                     )
-                    zone(rightModules, theme: theme)
-                }
-                // The gap after the flush buttons' own estimated width
-                // matches `itemSpacing` — the same spacing used between two
-                // taskbar icons — instead of either the old dead gap
-                // (edgePadding, too much) or none at all (too little).
-                .padding(.leading, hasFlushStartButton ? estimatedZoneWidth(["start-button"], tokens: tokens) + tokens.spacing.itemSpacing : tokens.spacing.edgePadding)
-                .padding(.trailing, hasFlushMinimizeAll ? estimatedZoneWidth(["minimize-all"], tokens: tokens) + tokens.spacing.itemSpacing : tokens.spacing.edgePadding)
-
-                // Pinned to the geometry's own edges (not sequenced inside
-                // the HStack above) so their clickable frame always reaches
-                // all the way to the screen's leading/trailing edge — laying
-                // them out as ordinary HStack siblings left their position
-                // dependent on `estimatedZoneWidth`'s accuracy for every
-                // other module, so any drift there shifted both flush
-                // buttons away from the true edge instead of just changing
-                // how much room the center zone got.
-                if hasFlushStartButton {
-                    HStack {
-                        startButton(theme: theme)
-                        Spacer(minLength: 0)
+                    if !rightModules.isEmpty {
+                        zone(rightModules, theme: theme)
                     }
-                }
-                if hasFlushMinimizeAll {
-                    HStack {
-                        Spacer(minLength: 0)
+                    if hasFlushMinimizeAll {
                         minimizeAllButton(theme: theme)
                     }
                 }
+                .padding(.leading, hasFlushStartButton ? 0 : tokens.spacing.edgePadding)
+                .padding(.trailing, hasFlushMinimizeAll ? 0 : tokens.spacing.edgePadding)
             }
+            // Named so `startButton(theme:)` can publish its own frame in
+            // this same space — see `StartMenuState.startButtonFrame`.
+            .coordinateSpace(name: Self.taskbarRootCoordinateSpace)
         }
         .frame(height: tokens.panel.height)
         // Plain-style buttons (start, minimize-all, trash) still pick up
@@ -102,9 +125,10 @@ struct TaskbarView: View {
         // a highlighted outline around the button — this suppresses that
         // for the whole bar rather than every button individually.
         .focusEffectDisabled()
-        .contextMenu {
-            personalizationMenu
-        }
+        // Right-click still opens a native `NSMenu` (see
+        // `TaskbarContainerView`/`PersonalizationMenuBuilder`), but it now
+        // only offers "Paramètres…"/"Quitter" — every actual setting moved
+        // into `SettingsWindow`'s real, separate window instead.
     }
 
     /// Left/right zones are small and roughly fixed-size (start button,
@@ -112,13 +136,25 @@ struct TaskbarView: View {
     /// formulas used to render them, rather than measured live — that
     /// keeps the center zone's budget a single deterministic number instead
     /// of a second, independently-negotiated flexible layout.
-    private func centerAvailableWidth(totalWidth: CGFloat, theme: Theme) -> CGFloat {
+    private func centerAvailableWidth(totalWidth: CGFloat, theme: Theme, startButtonMovedToCenter: Bool) -> CGFloat {
         let tokens = theme.tokens
-        let leftWidth = estimatedZoneWidth(theme.layout.zones.left, tokens: tokens)
+        // The start button no longer eats into the left zone's width once
+        // it's rendered inside the centered group itself — it eats into
+        // *this* budget instead, same as any other centered module.
+        let leftZoneForWidth = startButtonMovedToCenter
+            ? theme.layout.zones.left.filter { $0 != "start-button" }
+            : theme.layout.zones.left
+        let leftWidth = estimatedZoneWidth(leftZoneForWidth, tokens: tokens)
         let rightWidth = estimatedZoneWidth(theme.layout.zones.right, tokens: tokens)
+        // Conversely, once it's a sibling inside the centered group, the
+        // start button now shares (and shrinks) that group's own budget —
+        // matching the extra `itemSpacing` gap it introduces there too.
+        let startButtonInCenterWidth = startButtonMovedToCenter
+            ? estimatedZoneWidth(["start-button"], tokens: tokens) + tokens.spacing.itemSpacing
+            : 0
         let interZoneGaps = tokens.spacing.itemSpacing * 2 // between left↔center and center↔right
         let outerInsets = tokens.spacing.edgePadding * 2
-        return max(0, totalWidth - leftWidth - rightWidth - interZoneGaps - outerInsets)
+        return max(0, totalWidth - leftWidth - rightWidth - startButtonInCenterWidth - interZoneGaps - outerInsets)
     }
 
     private func estimatedZoneWidth(_ modules: [String], tokens: ThemeTokens) -> CGFloat {
@@ -128,11 +164,13 @@ struct TaskbarView: View {
             switch id {
             case "start-button":
                 // Matches the actual render: same size as a taskbar app
-                // icon (see `TaskButtonView.iconSize`), padded on both
-                // sides.
-                width += max(12, tokens.panel.height - 16) + tokens.spacing.edgePadding * 2
+                // icon (see `TaskButtonView.iconSize`), padded on the
+                // leading side only now (no trailing padding).
+                width += max(12, tokens.panel.height - 16) + tokens.spacing.edgePadding
             case "minimize-all":
-                width += tokens.panel.height - 8
+                // Matches the actual render: a vertical strip half as wide
+                // as it used to be.
+                width += max(6, (tokens.panel.height - 8) / 2)
             case "clock":
                 width += 64 // rough "HH:mm" + padding estimate; exact width depends on font metrics
             case "trash":
@@ -142,136 +180,6 @@ struct TaskbarView: View {
             }
         }
         return width
-    }
-
-    private static let sizePresets: [(key: String, height: Double)] = [
-        ("tiny", 28),
-        ("small", 36),
-        ("medium", 44),
-        ("large", 56),
-        ("xlarge", 72),
-        ("huge", 96)
-    ]
-    private static let sizeStep: Double = 2
-    private static let minPanelHeight: Double = 22
-    private static let maxPanelHeight: Double = 160
-
-    /// Right-click on the taskbar: the customization menu.
-    @ViewBuilder
-    private var personalizationMenu: some View {
-        Menu(L("menu.theme")) {
-            ForEach(themeStore.availableThemes) { theme in
-                Button {
-                    themeStore.setActiveTheme(theme)
-                } label: {
-                    if theme.id == themeStore.activeTheme?.id {
-                        Label(theme.manifest.name, systemImage: "checkmark")
-                    } else {
-                        Text(theme.manifest.name)
-                    }
-                }
-            }
-        }
-        Menu(L("menu.bar_size")) {
-            ForEach(Self.sizePresets, id: \.key) { preset in
-                Button {
-                    themeStore.panelHeightOverride = preset.height
-                } label: {
-                    let isSelected = (themeStore.panelHeightOverride ?? themeStore.activeTheme?.tokens.panel.height) == preset.height
-                    if isSelected {
-                        Label(L("size.\(preset.key)"), systemImage: "checkmark")
-                    } else {
-                        Text(L("size.\(preset.key)"))
-                    }
-                }
-            }
-            Divider()
-            Button(L("size.increase")) { nudgePanelHeight(by: Self.sizeStep) }
-            Button(L("size.decrease")) { nudgePanelHeight(by: -Self.sizeStep) }
-            Button(L("size.custom")) { promptCustomHeight() }
-            Divider()
-            Text(L("size.hint"))
-        }
-        Menu(L("menu.open_apps")) {
-            displayStyleItem(label: L("display.icon_and_label"), value: "iconAndLabel")
-            displayStyleItem(label: L("display.icon_only"), value: "iconOnly")
-        }
-        Button {
-            themeStore.liquidGlassEnabled.toggle()
-        } label: {
-            if themeStore.liquidGlassEnabled {
-                Label(L("menu.liquid_glass"), systemImage: "checkmark")
-            } else {
-                Text(L("menu.liquid_glass"))
-            }
-        }
-        Menu(L("menu.language")) {
-            Button {
-                themeStore.languageOverride = nil
-            } label: {
-                let systemLanguage = Localization.supportedLanguages.first { $0.code == Locale.preferredLanguages.first.map { String($0.prefix(2)) } }?.label
-                    ?? Localization.supportedLanguages.first { $0.code == "fr" }!.label
-                let label = L("language.system", ["lang": systemLanguage])
-                if themeStore.languageOverride == nil {
-                    Label(label, systemImage: "checkmark")
-                } else {
-                    Text(label)
-                }
-            }
-            Divider()
-            ForEach(Localization.supportedLanguages, id: \.code) { language in
-                Button {
-                    themeStore.languageOverride = language.code
-                } label: {
-                    if themeStore.languageOverride == language.code {
-                        Label(language.label, systemImage: "checkmark")
-                    } else {
-                        Text(language.label)
-                    }
-                }
-            }
-        }
-        Divider()
-        Button(L("menu.quit")) {
-            NSApp.terminate(nil)
-        }
-    }
-
-    private func nudgePanelHeight(by delta: Double) {
-        let current = themeStore.panelHeightOverride ?? Double(themeStore.effectivePanelHeight)
-        themeStore.panelHeightOverride = min(Self.maxPanelHeight, max(Self.minPanelHeight, current + delta))
-    }
-
-    private func promptCustomHeight() {
-        let current = themeStore.panelHeightOverride ?? Double(themeStore.effectivePanelHeight)
-
-        let alert = NSAlert()
-        alert.messageText = L("alert.custom_size.title")
-        alert.informativeText = L("alert.custom_size.message", ["min": String(Int(Self.minPanelHeight)), "max": String(Int(Self.maxPanelHeight))])
-        alert.addButton(withTitle: L("button.apply"))
-        alert.addButton(withTitle: L("button.cancel"))
-
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
-        field.stringValue = String(Int(current))
-        field.alignment = .right
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-
-        if alert.runModal() == .alertFirstButtonReturn, let value = Double(field.stringValue) {
-            themeStore.panelHeightOverride = min(Self.maxPanelHeight, max(Self.minPanelHeight, value))
-        }
-    }
-
-    private func displayStyleItem(label: String, value: String) -> some View {
-        Button {
-            themeStore.taskDisplayStyleOverride = value
-        } label: {
-            if themeStore.effectiveTaskDisplayStyle == value {
-                Label(label, systemImage: "checkmark")
-            } else {
-                Text(label)
-            }
-        }
     }
 
     @ViewBuilder
@@ -295,8 +203,22 @@ struct TaskbarView: View {
     /// zone, and is vertically centered like the rest of the bar — a plain
     /// `GeometryReader` child defaults to top-leading, not centered.
     @ViewBuilder
-    private func centerZone(_ modules: [String], theme: Theme, availableWidth: CGFloat) -> some View {
+    private func centerZone(_ modules: [String], theme: Theme, availableWidth: CGFloat, includeStartButton: Bool) -> some View {
         HStack(spacing: theme.tokens.spacing.itemSpacing) {
+            // Centering just means giving this content a matching leading
+            // Spacer too — the trailing one already left room for it to
+            // shrink towards its natural width instead of stretching, so a
+            // leading one splits that same leftover room evenly on both
+            // sides instead of pushing it all to the right.
+            if themeStore.centerTaskListEnabled {
+                Spacer(minLength: 0)
+            }
+            // "Centrer avec le menu démarrer": the button travels here,
+            // first in the centered group, instead of staying flush at the
+            // panel's true left edge (see `content(for:)`'s `hasFlushStartButton`).
+            if includeStartButton {
+                startButton(theme: theme)
+            }
             ForEach(modules, id: \.self) { moduleID in
                 if moduleID == "task-list" {
                     taskList(theme: theme, availableWidth: availableWidth)
@@ -306,7 +228,21 @@ struct TaskbarView: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(width: availableWidth, height: theme.tokens.panel.height, alignment: .center)
+        // Flexible (fills whatever the outer `HStack` actually gives it),
+        // not fixed to the *estimated* `availableWidth` — that estimate is
+        // only ever "close enough" (font metrics, rounding), and a fixed
+        // width here meant any error left the whole row's total width
+        // short of or past the panel's real width. Since `HStack` has no
+        // other flexible sibling, that error had nowhere to go but
+        // centering slack on *both* outer edges — pushing the start
+        // button and the minimize-all strip away from the true screen
+        // edges by half the error each, even though neither of them was
+        // what was actually miscalculated. Letting this zone absorb the
+        // error instead keeps it exactly where a rounding mistake belongs:
+        // invisible, inside the flexible task list, not at the panel's
+        // edges.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .frame(height: theme.tokens.panel.height)
         .clipped()
     }
 
@@ -333,7 +269,7 @@ struct TaskbarView: View {
     private func startButton(theme: Theme) -> some View {
         let tokens = theme.tokens
         return Button {
-            startMenuState.isPresented.toggle()
+            startMenuState.toggleOrOpenSpotlight(style: themeStore.startMenuStyle)
         } label: {
             HStack(spacing: 6) {
                 // No filled background: just the logo, sitting directly on
@@ -343,8 +279,15 @@ struct TaskbarView: View {
                 // which differs between each theme's light/dark variant.
                 // Same size as a taskbar app icon (`TaskButtonView.iconSize`
                 // etc.) rather than its own fixed-per-theme size, so it
-                // visually matches the icons sitting right next to it.
-                ThemeIcon(url: theme.iconURL("start-button"), colorHex: tokens.colors.textPrimary, size: max(12, tokens.panel.height - 16))
+                // visually matches the icons sitting right next to it —
+                // except for a theme that explicitly asks to fill the
+                // panel's whole height instead (Windows 7's Start orb,
+                // drawn corner-to-corner in the real taskbar).
+                ThemeIcon(
+                    url: theme.iconURL("start-button"),
+                    colorHex: tokens.colors.textPrimary,
+                    size: tokens.startButton.fillHeight == true ? tokens.panel.height : max(12, tokens.panel.height - 16)
+                )
                 if tokens.startButton.showLabel {
                     Text(tokens.startButton.label)
                         .font(.system(size: tokens.typography.fontSize, weight: .medium))
@@ -352,7 +295,11 @@ struct TaskbarView: View {
                         .padding(.trailing, tokens.spacing.edgePadding)
                 }
             }
-            .padding(.horizontal, tokens.spacing.edgePadding)
+            // Leading padding only — no breathing room on the right, so
+            // the icon sits as close as possible to whatever comes right
+            // after it (the trailing edge was the actual source of the
+            // lingering gap, not the task buttons' own alignment).
+            .padding(.leading, tokens.spacing.edgePadding)
             .frame(height: tokens.panel.height)
         }
         .buttonStyle(.plain)
@@ -360,7 +307,31 @@ struct TaskbarView: View {
         // No longer presented as a SwiftUI `.popover` — see
         // `StartMenuPanel`, a real resizable window that `TaskbarPanel`
         // shows/hides by observing `startMenuState.isPresented` directly.
+        // Publishes this button's own frame so `StartMenuState`'s outside-
+        // click monitor can tell a click *on the button* apart from a click
+        // anywhere else on the bar (see `startButtonFrame`'s doc comment) —
+        // tracked live since the button's position moves depending on the
+        // "Centrer avec le menu démarrer" setting.
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { startMenuState.startButtonFrame = geo.frame(in: .named(Self.taskbarRootCoordinateSpace)) }
+                    .onChange(of: geo.frame(in: .named(Self.taskbarRootCoordinateSpace))) { _, newValue in
+                        startMenuState.startButtonFrame = newValue
+                    }
+            }
+        )
     }
+
+    /// Named coordinate space the whole bar renders into (see
+    /// `content(for:)`), shared with `startButton(theme:)` so it can report
+    /// its own frame in a space that's directly comparable to an AppKit
+    /// `NSEvent.locationInWindow` after a single Y-flip (this view's root
+    /// fills the panel's entire window content area, so its origin lines up
+    /// exactly with the window's own).
+    /// Not `private` — `GroupedTaskButtonView` publishes its own frame into
+    /// this same space too (see `WindowManager.groupButtonFrames`).
+    static let taskbarRootCoordinateSpace = "taskbarRoot"
 
     @ViewBuilder
     private func taskList(theme: Theme, availableWidth: CGFloat) -> some View {
@@ -399,7 +370,11 @@ struct TaskbarView: View {
                         width: itemWidth
                     )
                 case .launcher(let app):
-                    LauncherButtonView(app: app, tokens: tokens, windowManager: windowManager, width: itemWidth) {
+                    // Always icon-only width, regardless of the "icon + name"
+                    // setting or how wide open-window buttons are in this
+                    // same row — a closed, pinned launcher never shows a
+                    // name, so it shouldn't reserve room for one either.
+                    LauncherButtonView(app: app, tokens: tokens, windowManager: windowManager, width: iconOnlyWidth) {
                         windowManager.launch(app)
                     }
                 }
@@ -417,16 +392,21 @@ struct TaskbarView: View {
         }
     }
 
+    // No icon, half the previous width, with a visible frame — a plain
+    // vertical strip, the way Windows 7's own "show desktop" sliver at the
+    // far right of the taskbar looks (see the reference screenshot), in
+    // place of the icon-in-a-square button used before.
+    private static let minimizeAllStrokeWidth: CGFloat = 1
+
     private func minimizeAllButton(theme: Theme) -> some View {
         let tokens = theme.tokens
+        let width = max(6, (tokens.panel.height - 8) / 2)
         return Button(action: onMinimizeAll) {
-            ThemeIcon(url: theme.iconURL("show-desktop"), colorHex: tokens.colors.textPrimary, size: max(10, tokens.panel.height - 22))
-                .frame(width: tokens.panel.height - 8, height: tokens.panel.height)
-                .background(GlassButtonBackground(tokens: tokens, liquidGlassEnabled: themeStore.liquidGlassEnabled, liquidGlassIntensity: themeStore.liquidGlassIntensity))
-                // Square, not rounded — same reasoning as the start button:
-                // this one sits flush against the right edge/corner, and the
-                // clickable area spans the full panel height (not inset)
-                // so it actually reaches the bottom-right corner.
+            GlassButtonBackground(tokens: tokens, liquidGlassEnabled: themeStore.liquidGlassEnabled, liquidGlassIntensity: themeStore.liquidGlassIntensity)
+                .frame(width: width, height: tokens.panel.height)
+                .overlay(
+                    Rectangle().strokeBorder(Color(hex: tokens.colors.textSecondary).opacity(0.5), lineWidth: Self.minimizeAllStrokeWidth)
+                )
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
@@ -452,10 +432,26 @@ struct TaskbarView: View {
 
     private func clockView(tokens: ThemeTokens) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            Text(context.date, format: .dateTime.hour().minute())
-                .font(.system(size: tokens.typography.fontSize, weight: .medium))
-                .foregroundStyle(Color(hex: tokens.colors.textPrimary))
-                .padding(.horizontal, tokens.spacing.edgePadding)
+            VStack(spacing: 0) {
+                // `.dateTime` styles order/format components (12h "1:38 PM"
+                // vs. 24h "13:38", day/month order, …) from the environment
+                // locale below, rather than from a hardcoded pattern — that
+                // locale is the app's *chosen* language (see
+                // `Localization.effectiveLocale`), not necessarily the
+                // system's own region setting, since those two can disagree
+                // (e.g. the language overridden to Russian on a Mac whose
+                // system region is still French).
+                Text(context.date, format: .dateTime.hour().minute())
+                    .font(.system(size: tokens.typography.fontSize, weight: .medium))
+                    .foregroundStyle(Color(hex: tokens.colors.textPrimary))
+                if themeStore.clockShowDate {
+                    Text(context.date, format: .dateTime.day().month().year())
+                        .font(.system(size: max(8, tokens.typography.fontSize - 5)))
+                        .foregroundStyle(Color(hex: tokens.colors.textSecondary))
+                }
+            }
+            .padding(.horizontal, tokens.spacing.edgePadding)
         }
+        .environment(\.locale, Localization.effectiveLocale)
     }
 }

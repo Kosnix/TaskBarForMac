@@ -56,6 +56,13 @@ struct TaskButtonTokens: Codable, Equatable {
 struct StartButtonTokens: Codable, Equatable {
     var showLabel: Bool
     var label: String
+    /// When true, the start button's icon fills the panel's entire height
+    /// edge-to-edge instead of the usual 16pt inset — the Windows 7 "Start
+    /// orb" is drawn corner-to-corner in the real taskbar, unlike every
+    /// other theme's smaller, inset glyph. Optional (defaults to `false`
+    /// when a theme's `tokens.json` doesn't declare it) so every existing
+    /// theme file keeps working unmodified.
+    var fillHeight: Bool?
 }
 
 /// `tokens.json` — the design tokens every generic UI component reads from.

@@ -1,24 +1,25 @@
 import AppKit
 import Foundation
 
-/// Hides the native Dock the classic way: `autohide` with an effectively
-/// infinite reveal delay, so it never practically comes back on its own.
+/// Hides the real Dock entirely (`autohide`) so our panel can replace it
+/// visually, one level above where the Dock itself would render (see
+/// `TaskbarPanel.aboveDockLevel`).
 ///
-/// This was previously replaced with shrinking the real Dock's tile size
-/// instead, so macOS kept reserving its screen space for other windows to
-/// avoid (matching how a normal, visible Dock behaves) — reverted back to
-/// plain `autohide` on request. The tradeoff: with the Dock's space fully
-/// reclaimed by macOS, other apps' maximized/fullscreen windows can render
-/// underneath our panel again. The upside that mattered more here: the Dock
-/// is genuinely off-screen rather than just shrunk-but-present, so there's
-/// nothing left for a translucent (Liquid Glass) panel background to show
-/// through.
+/// This has bounced between two mechanisms: plain `autohide` (macOS fully
+/// reclaims the Dock's space once it's hidden, so other apps' maximized
+/// windows can render underneath our panel instead of stopping above it)
+/// and shrinking the Dock's tile size instead (keeps the space reservation,
+/// at the cost of the real Dock being shrunk-but-present rather than
+/// genuinely off-screen — which turned out to let its native icon-hover
+/// tooltips float above our panel, since a *running* app always gets a Dock
+/// icon no matter what `persistent-apps`/`static-only` say, and Dock's own
+/// hover tracking isn't blocked by our panel sitting visually on top of it).
+/// Plain `autohide` wins now: it's the only way to make the real Dock
+/// genuinely produce zero icons and zero tooltips, and the windows-under-
+/// the-bar tradeoff is instead handled by `WindowManager.reclaimReservedSpace`,
+/// which nudges any window that dips into our panel's area back above it.
 final class DockController {
     private let dockDomain = "com.apple.dock" as CFString
-
-    /// Large enough that the Dock effectively never reappears on its own —
-    /// the whole point of hiding it.
-    private static let autohideDelaySeconds: Double = 9999
 
     private struct Snapshot: Codable {
         var autohideExists: Bool
@@ -30,15 +31,15 @@ final class DockController {
     }
 
     private let defaults = UserDefaults.standard
-    private let snapshotKey = "TB.dock.snapshotV3"
-    private let isActiveFlagKey = "TB.dock.isCurrentlyHiddenV3"
+    private let snapshotKey = "TB.dock.snapshotV5"
+    private let isActiveFlagKey = "TB.dock.isCurrentlyHiddenV5"
 
     /// The screen the real Dock (and therefore our panel) lives on: the one
     /// that owns the menu bar — `NSScreen.screens.first`, not necessarily
     /// `NSScreen.main` (which follows key-window focus).
     static var dockScreen: NSScreen? { NSScreen.screens.first }
 
-    /// If a previous run left the Dock hidden (crash / force-quit before
+    /// If a previous run left the Dock modified (crash / force-quit before
     /// `restoreDock()` ran), ask the user whether to restore it first.
     func offerRecoveryIfNeeded() {
         guard defaults.bool(forKey: isActiveFlagKey) else { return }
@@ -53,24 +54,24 @@ final class DockController {
         }
     }
 
-    /// Reads and remembers the Dock's current settings the first time this
-    /// runs in a session, then switches it to `autohide` with a ~9999s
-    /// delay before it would reappear.
-    func hideDock() {
+    /// Reads and remembers the Dock's current `autohide` settings the first
+    /// time this runs in a session, then turns autohide on so the real Dock
+    /// stays genuinely off-screen (and produces no icons/tooltips) while our
+    /// panel is up.
+    func reserveDockSpace() {
         if !defaults.bool(forKey: isActiveFlagKey) {
             captureSnapshot()
         }
         setValue(true as CFBoolean, for: "autohide")
-        setValue(Self.autohideDelaySeconds as CFNumber, for: "autohide-delay")
-        setValue(0.0 as CFNumber, for: "autohide-time-modifier")
         applyAndRestartDock()
         defaults.set(true, forKey: isActiveFlagKey)
     }
 
     /// A single, non-blocking read of how much space is currently reserved
-    /// at the bottom of the Dock's screen (0 if unavailable — which is the
-    /// normal state once the Dock is auto-hidden, since macOS reclaims that
-    /// space).
+    /// at the bottom of the Dock's screen — with the real Dock auto-hidden,
+    /// this is always ~0; `ThemeStore` still floors the panel to it so a
+    /// leftover non-zero reading (e.g. right after `restoreDock()`, before
+    /// autohide re-engages) never leaves the panel shorter than necessary.
     static func currentReservedHeight() -> CGFloat {
         guard let screen = dockScreen else { return 0 }
         return max(0, screen.visibleFrame.minY - screen.frame.minY)
@@ -89,25 +90,21 @@ final class DockController {
             return
         }
 
-        if snapshot.autohideExists {
-            setValue(snapshot.autohide as CFBoolean, for: "autohide")
-        } else {
-            removeValue(for: "autohide")
-        }
-        if snapshot.autohideDelayExists {
-            setValue(snapshot.autohideDelay as CFNumber, for: "autohide-delay")
-        } else {
-            removeValue(for: "autohide-delay")
-        }
-        if snapshot.autohideTimeModifierExists {
-            setValue(snapshot.autohideTimeModifier as CFNumber, for: "autohide-time-modifier")
-        } else {
-            removeValue(for: "autohide-time-modifier")
-        }
+        restore(snapshot.autohideExists, snapshot.autohide as CFBoolean, for: "autohide")
+        restore(snapshot.autohideDelayExists, snapshot.autohideDelay as CFNumber, for: "autohide-delay")
+        restore(snapshot.autohideTimeModifierExists, snapshot.autohideTimeModifier as CFNumber, for: "autohide-time-modifier")
         applyAndRestartDock()
     }
 
     // MARK: - CFPreferences plumbing
+
+    private func restore(_ exists: Bool, _ value: CFPropertyList, for key: String) {
+        if exists {
+            setValue(value, for: key)
+        } else {
+            removeValue(for: key)
+        }
+    }
 
     private func setValue(_ value: CFPropertyList, for key: String) {
         CFPreferencesSetValue(key as CFString, value, dockDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)

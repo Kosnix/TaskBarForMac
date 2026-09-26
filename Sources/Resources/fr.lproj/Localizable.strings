@@ -4,31 +4,45 @@
 "button.cancel" = "Annuler";
 
 /* Personalization menu */
+"menu.settings" = "Paramètres…";
 "menu.theme" = "Thème";
 "menu.bar_size" = "Taille de la barre";
 "menu.open_apps" = "Applications ouvertes";
 "menu.liquid_glass" = "Fond en verre liquide";
+"menu.liquid_glass_intensity" = "Intensité du verre liquide";
+"menu.auto_hide" = "Masquer la taskbar automatiquement";
 "menu.language" = "Langue";
 "menu.quit" = "Quitter la barre des tâches";
 "language.system" = "Système ({lang})";
 
-"size.tiny" = "Très petite";
-"size.small" = "Petite";
-"size.medium" = "Moyenne";
-"size.large" = "Grande";
-"size.xlarge" = "Très grande";
-"size.huge" = "Énorme";
-"size.increase" = "Agrandir (+2px)";
-"size.decrease" = "Réduire (-2px)";
-"size.custom" = "Taille personnalisée…";
-"size.hint" = "Astuce : tire le bord supérieur de la barre pour ajuster librement (22 à 160px).";
-
 "display.icon_and_label" = "Icône + nom";
 "display.icon_only" = "Icônes seules";
 
-/* Custom size alert */
-"alert.custom_size.title" = "Taille personnalisée de la barre";
-"alert.custom_size.message" = "Hauteur en pixels ({min} à {max}).";
+/* Settings window */
+"settings.window_title" = "Paramètres";
+"settings.color_scheme" = "Mode d'affichage";
+"settings.color_scheme.light" = "Clair";
+"settings.color_scheme.dark" = "Sombre";
+"settings.color_scheme.system" = "Automatique";
+"settings.section.layout" = "Disposition";
+"settings.alignment" = "Alignement des icônes";
+"settings.alignment.left" = "Aligné à gauche";
+"settings.alignment.center" = "Centrer";
+"settings.alignment.center_with_start" = "Centrer avec le menu démarrer";
+"settings.section.clock" = "Horloge";
+"settings.clock.show" = "Afficher l'horloge";
+"settings.clock.show_date" = "Afficher la date";
+"settings.section.appearance" = "Apparence";
+"settings.section.general" = "Général";
+"settings.launch_at_login" = "Démarrer avec la session";
+"settings.section.start_menu" = "Menu démarrer";
+"settings.start_menu_style" = "Style";
+"settings.start_menu_style.kickoff" = "Kickoff";
+"settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.spotlight" = "Spotlight";
+"start.pinned" = "Épinglé";
+"start.all_apps" = "Toutes les applications";
+"start.search_results" = "Résultats de la recherche";
 
 /* Taskbar */
 "accessibility.prompt" = "Autoriser l'accès à l'Accessibilité pour gérer les fenêtres →";
@@ -53,11 +67,14 @@
 "search.placeholder" = "Rechercher une application…";
 
 /* Start menu app grid */
+"alert.unpin.title" = "Détacher « {name} » de la barre des tâches ?";
+"alert.unpin.message" = "L'application sera retirée de la barre des tâches et du Dock.";
 "app.trash" = "Déplacer à la corbeille";
 "alert.trash_app.title" = "Supprimer « {name} » ?";
 "alert.trash_app.message" = "L'application sera déplacée à la corbeille.";
 "alert.uninstall_failed.title" = "Impossible de supprimer « {name} »";
 "alert.uninstall_failed.message" = "Cette application est peut-être protégée par le système.\n{error}";
+
 
 /* Dock recovery */
 "alert.dock_recovery.title" = "Le Dock est resté modifié";

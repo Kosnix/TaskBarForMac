@@ -30,9 +30,25 @@ struct GroupedTaskButtonView: View {
             windowCountBadge
         }
         .padding(.horizontal, tokens.spacing.edgePadding)
-        .frame(width: width, height: tokens.panel.height - 8)
+        // Left-aligned, not the default center: when this button's
+        // allocated `width` is wider than its actual content (few open
+        // windows sharing a lot of available space), centering left a gap
+        // of empty space *before* the icon too, not just after it —
+        // exactly the kind of "space that's still there" no amount of
+        // fixing the start button's own padding could touch, since it was
+        // never the start button's gap to begin with.
+        .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
         .background(backgroundColor)
-        .overlay(activeIndicator, alignment: .bottom)
+        // Positioned by hand, pinned to the button's own bottom edge — see
+        // `TaskButtonView`'s identical overlay for why a plain `.overlay`
+        // on the icon isn't enough (the icon can float vertically centered
+        // within a taller button, carrying a naively-attached dot away
+        // from the true bottom edge with it).
+        .overlay(alignment: .bottomLeading) {
+            allMinimizedDot
+                .offset(x: tokens.spacing.edgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
+        }
+        .overlay(activeUnderline, alignment: .bottom)
         .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
         .contentShape(Rectangle())
         .onTapGesture {
@@ -56,75 +72,26 @@ struct GroupedTaskButtonView: View {
                 windowManager.raise(first)
             }
         }
-        .popover(isPresented: Binding(
-            get: { windowManager.hoveredGroupID == bundleIdentifier },
-            set: { if !$0 { windowManager.setGroupHovered(bundleIdentifier, hovering: false) } }
-        ), arrowEdge: .top) {
-            windowListPopover
-        }
+        // Publishes this button's own frame so `TaskbarView` can position
+        // the hover window-list popup itself — see `groupButtonFrames`'s
+        // doc comment for why this replaced a plain SwiftUI `.popover`
+        // here (same underlying issue `StartMenuState` already documents
+        // for `.popover` in this app's kind of panel).
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { windowManager.groupButtonFrames[bundleIdentifier] = geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace)) }
+                    .onChange(of: geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))) { _, newValue in
+                        windowManager.groupButtonFrames[bundleIdentifier] = newValue
+                    }
+            }
+        )
     }
 
     private var windowCountBadge: some View {
         Text("\(windows.count)")
             .font(.system(size: tokens.typography.fontSize - 2, weight: .semibold))
             .foregroundStyle(Color(hex: tokens.colors.textSecondary))
-    }
-
-    private var windowListPopover: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(windows, id: \.id) { window in
-                windowRow(window)
-            }
-        }
-        .padding(6)
-        .frame(minWidth: 220)
-        .background(Color(hex: tokens.panel.backgroundColor))
-        .onHover { hovering in
-            windowManager.setGroupHovered(bundleIdentifier, hovering: hovering)
-        }
-    }
-
-    private func windowRow(_ window: AppWindow) -> some View {
-        HStack(spacing: 8) {
-            Text(window.title)
-                .font(.system(size: tokens.typography.fontSize))
-                .foregroundStyle(Color(hex: tokens.colors.textPrimary))
-                .lineLimit(1)
-                .opacity(window.isMinimized ? 0.6 : 1.0)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    windowManager.activateOrMinimize(window)
-                }
-
-            Button {
-                windowManager.toggleMinimize(window)
-            } label: {
-                Image(systemName: window.isMinimized ? "arrow.up.right.square" : "arrow.down.right.square")
-            }
-            .buttonStyle(.plain)
-            .help(window.isMinimized ? L("window.restore") : L("window.minimize"))
-
-            Button {
-                windowManager.close(window)
-            } label: {
-                Image(systemName: "xmark.square")
-            }
-            .buttonStyle(.plain)
-            .help(L("window.close"))
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(Color(hex: tokens.colors.buttonBackgroundHover).opacity(0.001)) // keeps the whole row hit-testable
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-        .contextMenu {
-            Button(window.isMinimized ? L("window.restore") : L("window.minimize")) {
-                windowManager.toggleMinimize(window)
-            }
-            Button(L("window.close")) {
-                windowManager.close(window)
-            }
-        }
     }
 
     /// Same 0.3 Breeze `Metrics::Blend_Value` hover alpha used by
@@ -136,9 +103,24 @@ struct GroupedTaskButtonView: View {
         return .clear
     }
 
+    private static let minimizedDotSize: CGFloat = 4
+    private static let minimizedDotBottomInset: CGFloat = 2
+
     @ViewBuilder
-    private var activeIndicator: some View {
-        if tokens.taskButton.indicatorStyle == "underline" && anyActive {
+    private var allMinimizedDot: some View {
+        if !anyActive {
+            // Every window in the group is minimized — same dot convention
+            // as a single minimized window (see `TaskButtonView`), instead
+            // of dimming the whole button.
+            Circle()
+                .fill(Color(hex: tokens.colors.textSecondary))
+                .frame(width: Self.minimizedDotSize, height: Self.minimizedDotSize)
+        }
+    }
+
+    @ViewBuilder
+    private var activeUnderline: some View {
+        if anyActive && tokens.taskButton.indicatorStyle == "underline" {
             Rectangle()
                 .fill(Color(hex: tokens.colors.accent))
                 .frame(height: 2)

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -22,6 +23,37 @@ extension Notification.Name {
     static let startMenuSizeDidChange = Notification.Name("TB.startMenuSizeDidChange")
 }
 
+/// Light/dark now chosen independently of which theme "family" is active —
+/// every family ships both a `-light` and a `-dark` folder (same `id` minus
+/// that suffix, same `manifest.name` minus " Light"/" Dark"), so picking a
+/// family and a mode separately just means resolving to whichever of that
+/// family's two folders matches.
+enum ColorSchemeMode: String, CaseIterable {
+    case light, dark, system
+}
+
+/// Which UI the start button opens — see `ThemeStore.startMenuStyle`.
+enum StartMenuStyle: String, CaseIterable {
+    /// The original Plasma Kickoff-style layout: search on top, a category
+    /// sidebar on the left, a filterable app grid on the right.
+    case kickoff
+    /// Windows 11's Start menu: search on top, no sidebar, a grid of
+    /// taskbar-pinned apps under "Épinglé" with a toggle to show every
+    /// discovered app instead, an account-name/power-button footer.
+    case windows11
+    /// Opens the real, system Spotlight instead of any menu this app draws
+    /// itself — see `SpotlightTrigger`.
+    case realSpotlight
+}
+
+/// One theme "family" (e.g. "Breeze", "Windows 7") — a `-light`/`-dark`
+/// pair grouped under a shared id/display name, for `ThemeStore`'s
+/// mode-independent theme picker. See `ColorSchemeMode`.
+struct ThemeFamily: Identifiable, Hashable {
+    let id: String
+    let displayName: String
+}
+
 /// Holds the active theme and every theme discovered on disk, and hot-reloads
 /// the active theme's folder so editing tokens.json updates the UI live.
 /// Also owns the user's panel-size override and the real Dock's measured
@@ -38,6 +70,94 @@ final class ThemeStore {
 
     private static let heightOverrideKey = "TB.panel.heightOverride"
     private static let activeThemeIDKey = "TB.theme.activeID"
+    private static let selectedFamilyIDKey = "TB.theme.familyID"
+    private static let colorSchemeModeKey = "TB.theme.colorSchemeMode"
+
+    /// The currently chosen theme family (e.g. "breeze", "windows-7"),
+    /// independent of light/dark — see `colorSchemeMode`. Setting this
+    /// directly (rather than through `setActiveFamily`) would leave it out
+    /// of sync with `activeTheme`, so it's only ever changed there.
+    private(set) var selectedFamilyID: String = "breeze"
+
+    /// Every distinct family across `availableThemes`, one entry per
+    /// `-light`/`-dark` pair, for the Settings window's theme picker.
+    var themeFamilies: [ThemeFamily] {
+        var seen = Set<String>()
+        var result: [ThemeFamily] = []
+        for theme in availableThemes {
+            let familyID = Self.familyID(for: theme)
+            guard !seen.contains(familyID) else { continue }
+            seen.insert(familyID)
+            result.append(ThemeFamily(id: familyID, displayName: Self.familyDisplayName(for: theme)))
+        }
+        return result.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    private static func familyID(for theme: Theme) -> String {
+        let suffix = "-\(theme.manifest.variant)"
+        return theme.id.hasSuffix(suffix) ? String(theme.id.dropLast(suffix.count)) : theme.id
+    }
+
+    private static func familyDisplayName(for theme: Theme) -> String {
+        theme.manifest.name
+            .replacingOccurrences(of: " Dark", with: "")
+            .replacingOccurrences(of: " Light", with: "")
+    }
+
+    /// Picks `familyID`'s theme, persists the choice, and resolves it to
+    /// the right light/dark variant for the current `colorSchemeMode`.
+    func setActiveFamily(_ familyID: String) {
+        selectedFamilyID = familyID
+        UserDefaults.standard.set(familyID, forKey: Self.selectedFamilyIDKey)
+        resolveActiveTheme()
+    }
+
+    private static let systemAppearanceChangedNotification = Notification.Name("AppleInterfaceThemeChangedNotification")
+    private var systemAppearanceObserver: NSObjectProtocol?
+
+    /// Light, dark, or following the system's own appearance — independent
+    /// of `selectedFamilyID`. Changing this re-resolves the active theme to
+    /// that family's matching variant.
+    var colorSchemeMode: ColorSchemeMode = .dark {
+        didSet {
+            guard colorSchemeMode != oldValue else { return }
+            UserDefaults.standard.set(colorSchemeMode.rawValue, forKey: Self.colorSchemeModeKey)
+            resolveActiveTheme()
+        }
+    }
+
+    /// Resolves `selectedFamilyID` + `colorSchemeMode` to one of
+    /// `availableThemes` and applies it. A family missing the resolved
+    /// variant (shouldn't happen for the shipped themes, every one ships
+    /// both) falls back to whichever variant it does have.
+    private func resolveActiveTheme() {
+        let variant: String
+        switch colorSchemeMode {
+        case .light: variant = "light"
+        case .dark: variant = "dark"
+        case .system: variant = isSystemDarkModeActive() ? "dark" : "light"
+        }
+        let candidates = availableThemes.filter { Self.familyID(for: $0) == selectedFamilyID }
+        let resolved = candidates.first { $0.manifest.variant == variant } ?? candidates.first
+        if let resolved {
+            setActiveTheme(resolved)
+        }
+    }
+
+    private func isSystemDarkModeActive() -> Bool {
+        NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    private func startObservingSystemAppearance() {
+        systemAppearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Self.systemAppearanceChangedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.colorSchemeMode == .system else { return }
+            self.resolveActiveTheme()
+        }
+    }
 
     /// User-chosen panel height from the right-click "Taille de la barre"
     /// menu, persisted across launches. `nil` means "use the theme's own
@@ -162,6 +282,72 @@ final class ThemeStore {
         startMenuSizeOverride ?? dynamicStartMenuSize
     }
 
+    private static let autoHideEnabledKey = "TB.panel.autoHideEnabled"
+
+    /// Windows-style auto-hide: the bar retracts off-screen (leaving a
+    /// thin, hover-to-reveal sliver) when the mouse isn't near it — see
+    /// `TaskbarPanel`'s own auto-hide tracking, which reads this.
+    var autoHideEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(autoHideEnabled, forKey: Self.autoHideEnabledKey)
+        }
+    }
+
+    private static let centerTaskListEnabledKey = "TB.panel.centerTaskListEnabled"
+
+    /// When on, the center zone's content (the running-apps/launchers list,
+    /// plus anything else a theme puts there) is centered within the bar
+    /// instead of hugging its left edge — the bar's own background still
+    /// spans the full screen width either way, only the icons move. Off by
+    /// default, matching every theme's existing left-aligned look.
+    var centerTaskListEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(centerTaskListEnabled, forKey: Self.centerTaskListEnabledKey)
+        }
+    }
+
+    private static let centerIncludesStartButtonKey = "TB.panel.centerIncludesStartButton"
+
+    /// Only meaningful alongside `centerTaskListEnabled`: when both are on,
+    /// the start button moves out of its usual flush-left spot and becomes
+    /// the leading item of the centered group instead, so it visually
+    /// travels to the middle of the bar together with the icons rather than
+    /// staying pinned to the screen's left edge.
+    var centerIncludesStartButton: Bool {
+        didSet {
+            UserDefaults.standard.set(centerIncludesStartButton, forKey: Self.centerIncludesStartButtonKey)
+        }
+    }
+
+    private static let clockEnabledKey = "TB.clock.enabled"
+
+    /// Whether the clock module renders at all, for a theme that places one
+    /// in its layout — on by default, matching every theme's existing look.
+    var clockEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(clockEnabled, forKey: Self.clockEnabledKey)
+        }
+    }
+
+    private static let clockShowDateKey = "TB.clock.showDate"
+
+    /// Whether the date renders under the time — off by default (the
+    /// clock's existing time-only look).
+    var clockShowDate: Bool {
+        didSet {
+            UserDefaults.standard.set(clockShowDate, forKey: Self.clockShowDateKey)
+        }
+    }
+
+    private static let startMenuStyleKey = "TB.startMenu.style"
+
+    /// Which UI the start button opens — see `StartMenuStyle`.
+    var startMenuStyle: StartMenuStyle = .kickoff {
+        didSet {
+            UserDefaults.standard.set(startMenuStyle.rawValue, forKey: Self.startMenuStyleKey)
+        }
+    }
+
     /// Mirrors `Localization.languageOverride` (the actual persisted,
     /// globally-readable value — `L(...)` is called from plenty of places
     /// that have no `ThemeStore` in reach, like `SessionManager`'s alert
@@ -186,6 +372,14 @@ final class ThemeStore {
 
     init(preferredThemeID: String = "breeze-dark") {
         liquidGlassEnabled = UserDefaults.standard.bool(forKey: Self.liquidGlassEnabledKey)
+        autoHideEnabled = UserDefaults.standard.bool(forKey: Self.autoHideEnabledKey)
+        centerTaskListEnabled = UserDefaults.standard.bool(forKey: Self.centerTaskListEnabledKey)
+        centerIncludesStartButton = UserDefaults.standard.bool(forKey: Self.centerIncludesStartButtonKey)
+        clockEnabled = (UserDefaults.standard.object(forKey: Self.clockEnabledKey) as? Bool) ?? true
+        clockShowDate = UserDefaults.standard.bool(forKey: Self.clockShowDateKey)
+        if let storedStyle = UserDefaults.standard.string(forKey: Self.startMenuStyleKey), let style = StartMenuStyle(rawValue: storedStyle) {
+            startMenuStyle = style
+        }
         if let storedIntensity = UserDefaults.standard.object(forKey: Self.liquidGlassIntensityKey) as? Double {
             liquidGlassIntensity = storedIntensity
         } else {
@@ -203,14 +397,44 @@ final class ThemeStore {
             taskDisplayStyleOverride = stored
         }
         reloadThemeList()
-        // The user's last pick (from the right-click theme switcher) wins
-        // over the hardcoded default, so it survives a relaunch.
-        let rememberedID = UserDefaults.standard.string(forKey: Self.activeThemeIDKey) ?? preferredThemeID
-        if let preferred = availableThemes.first(where: { $0.id == rememberedID }) {
-            setActiveTheme(preferred)
-        } else if let first = availableThemes.first {
+
+        // The pre-"family" version of this app persisted one exact theme
+        // id (e.g. "breeze-dark") under `activeThemeIDKey` — used below as
+        // a one-time migration source for whichever of the two new,
+        // independent keys isn't set yet, so an existing user's prior pick
+        // carries over as both their family *and* their initial light/dark
+        // mode, instead of silently resetting either one.
+        let legacyTheme = UserDefaults.standard.string(forKey: Self.activeThemeIDKey)
+            .flatMap { id in availableThemes.first { $0.id == id } }
+
+        if let storedFamily = UserDefaults.standard.string(forKey: Self.selectedFamilyIDKey) {
+            selectedFamilyID = storedFamily
+        } else if let legacyTheme {
+            selectedFamilyID = Self.familyID(for: legacyTheme)
+        } else if preferredThemeID.hasSuffix("-dark") {
+            selectedFamilyID = String(preferredThemeID.dropLast(5))
+        } else if preferredThemeID.hasSuffix("-light") {
+            selectedFamilyID = String(preferredThemeID.dropLast(6))
+        } else {
+            selectedFamilyID = preferredThemeID
+        }
+
+        if let storedMode = UserDefaults.standard.string(forKey: Self.colorSchemeModeKey), let mode = ColorSchemeMode(rawValue: storedMode) {
+            colorSchemeMode = mode
+        } else if let legacyTheme {
+            colorSchemeMode = legacyTheme.manifest.variant == "light" ? .light : .dark
+        }
+
+        // Direct assignments above may or may not have triggered
+        // `colorSchemeMode`'s `didSet` (it's a no-op re-resolve if the
+        // stored/migrated value happens to equal the inline default) — call
+        // this once, unconditionally, so the very first launch always ends
+        // up with a real `activeTheme` regardless.
+        resolveActiveTheme()
+        if activeTheme == nil, let first = availableThemes.first {
             setActiveTheme(first)
         }
+        startObservingSystemAppearance()
     }
 
     /// Called once at launch with what `DockController.replaceDock()`
@@ -286,6 +510,9 @@ final class ThemeStore {
 
     deinit {
         stopWatching()
+        if let systemAppearanceObserver {
+            DistributedNotificationCenter.default().removeObserver(systemAppearanceObserver)
+        }
     }
 }
 

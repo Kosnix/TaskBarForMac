@@ -91,7 +91,11 @@ final class StartMenuPanel: NSPanel {
         )
     }
 
-    private func makeRootView() -> StartMenuView {
+    /// Type-erased since the actual view swaps between `StartMenuView` and
+    /// `Windows11StartMenuView` depending on `ThemeStore.startMenuStyle` —
+    /// `NSHostingView`'s own generic type has to be fixed to whatever this
+    /// returns, so both layouts share one hosting view via `AnyView`.
+    private func makeRootView() -> AnyView {
         // Same fix-up `TaskbarView.content(for:)` applies: `activeTheme`
         // on its own still carries the theme's *default* `panel.height`
         // (e.g. 36), not the user's effective one (override, or floored by
@@ -99,15 +103,33 @@ final class StartMenuPanel: NSPanel {
         // actual height, not the theme's nominal one.
         var theme = themeStore.activeTheme ?? ThemeLoader.loadAllThemes()[0]
         theme.tokens.panel.height = themeStore.effectivePanelHeight
-        return StartMenuView(
-            appDiscovery: appDiscovery,
-            windowManager: windowManager,
-            theme: theme,
-            state: state,
-            liquidGlassEnabled: themeStore.liquidGlassEnabled,
-            liquidGlassIntensity: themeStore.liquidGlassIntensity
-        ) { [weak state] in
-            state?.isPresented = false
+        let onLaunch: () -> Void = { [weak state] in state?.isPresented = false }
+
+        switch themeStore.startMenuStyle {
+        case .kickoff, .realSpotlight:
+            // `.realSpotlight` never actually presents this panel (see
+            // `StartMenuState.toggleOrOpenSpotlight`) — falling back to the
+            // default layout here is just so this switch stays exhaustive,
+            // not something that's ever visibly reachable.
+            return AnyView(StartMenuView(
+                appDiscovery: appDiscovery,
+                windowManager: windowManager,
+                theme: theme,
+                state: state,
+                liquidGlassEnabled: themeStore.liquidGlassEnabled,
+                liquidGlassIntensity: themeStore.liquidGlassIntensity,
+                onLaunch: onLaunch
+            ))
+        case .windows11:
+            return AnyView(Windows11StartMenuView(
+                appDiscovery: appDiscovery,
+                windowManager: windowManager,
+                theme: theme,
+                state: state,
+                liquidGlassEnabled: themeStore.liquidGlassEnabled,
+                liquidGlassIntensity: themeStore.liquidGlassIntensity,
+                onLaunch: onLaunch
+            ))
         }
     }
 
@@ -120,7 +142,7 @@ final class StartMenuPanel: NSPanel {
             orderOut(nil)
             return
         }
-        (contentView?.subviews.first as? NSHostingView<StartMenuView>)?.rootView = makeRootView()
+        (contentView?.subviews.first as? NSHostingView<AnyView>)?.rootView = makeRootView()
         reposition()
         orderFrontRegardless()
         makeKey()
@@ -150,7 +172,13 @@ final class StartMenuPanel: NSPanel {
             return NSRect(origin: .zero, size: size)
         }
         let barHeight = themeStore.effectivePanelHeight
-        return NSRect(x: screen.frame.minX, y: screen.frame.minY + barHeight, width: size.width, height: size.height)
+        // When the start button itself travels to the middle of the bar
+        // ("Centrer avec le menu démarrer"), the menu it opens follows it
+        // there instead of staying flush against the screen's left edge.
+        let x = themeStore.centerTaskListEnabled && themeStore.centerIncludesStartButton
+            ? screen.frame.minX + (screen.frame.width - size.width) / 2
+            : screen.frame.minX
+        return NSRect(x: x, y: screen.frame.minY + barHeight, width: size.width, height: size.height)
     }
 
     /// One level above the taskbar panel's own level, so the menu renders

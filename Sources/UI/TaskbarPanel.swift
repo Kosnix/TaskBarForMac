@@ -7,8 +7,19 @@ import SwiftUI
 /// see `DockController`), and follows `ThemeStore.effectivePanelHeight`.
 final class TaskbarPanel: NSPanel {
     private let themeStore: ThemeStore
+    private let windowManager: WindowManager
     private let startMenuPanel: StartMenuPanel
+    private let startMenuState: StartMenuState
+    private let groupHoverPanel: GroupHoverPanel
     private static let resizeHandleThickness: CGFloat = 5
+
+    // MARK: Auto-hide (Windows-style: retract off-screen except a thin
+    // hover-to-reveal sliver when the mouse isn't near it)
+    private static let autoHideRevealSliver: CGFloat = 3
+    private static let autoHideRetractDelay: TimeInterval = 0.6
+    private var autoHideTimer: Timer?
+    private var isRetracted = false
+    private var retractWorkItem: DispatchWorkItem?
 
     init(
         themeStore: ThemeStore,
@@ -19,6 +30,9 @@ final class TaskbarPanel: NSPanel {
         onMinimizeAll: @escaping () -> Void
     ) {
         self.themeStore = themeStore
+        self.windowManager = windowManager
+        self.startMenuState = startMenuState
+        self.groupHoverPanel = GroupHoverPanel(windowManager: windowManager)
         let screenFrame = Self.frame(forHeight: themeStore.effectivePanelHeight)
 
         // Owns the start menu's own real window (see `StartMenuPanel`) and
@@ -62,8 +76,9 @@ final class TaskbarPanel: NSPanel {
             startMenuState: startMenuState
         )
 
-        let container = NSView(frame: NSRect(origin: .zero, size: screenFrame.size))
+        let container = TaskbarContainerView(frame: NSRect(origin: .zero, size: screenFrame.size))
         container.autoresizesSubviews = true
+        container.themeStore = themeStore
 
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = container.bounds
@@ -104,6 +119,12 @@ final class TaskbarPanel: NSPanel {
             name: .panelSizeDidChange,
             object: nil
         )
+
+        startAutoHideTracking()
+    }
+
+    deinit {
+        autoHideTimer?.invalidate()
     }
 
     func showAtDockPosition() {
@@ -121,8 +142,10 @@ final class TaskbarPanel: NSPanel {
         } else {
             orderOut(nil)
             // The start menu doesn't make sense floating on its own once
-            // the bar it's anchored to is gone.
+            // the bar it's anchored to is gone — same for the group-hover
+            // popup, which anchors to a button on the (now gone) bar.
             startMenuPanel.syncVisibilityAsDismissed()
+            groupHoverPanel.orderOut(nil)
         }
     }
 
@@ -131,7 +154,83 @@ final class TaskbarPanel: NSPanel {
     }
 
     private func reposition() {
-        setFrame(Self.frame(forHeight: themeStore.effectivePanelHeight), display: true)
+        setFrame(isRetracted ? retractedFrame() : Self.frame(forHeight: themeStore.effectivePanelHeight), display: true)
+    }
+
+    private func syncGroupHoverPanel() {
+        guard var tokens = themeStore.activeTheme?.tokens else { return }
+        tokens.panel.height = themeStore.effectivePanelHeight
+        groupHoverPanel.sync(tokens: tokens, panelHeight: tokens.panel.height)
+    }
+
+    // MARK: - Auto-hide
+
+    private func startAutoHideTracking() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            self?.checkAutoHide()
+        }
+    }
+
+    private func checkAutoHide() {
+        // Piggybacks on this same 0.15s tick rather than a second timer —
+        // `WindowManager`'s `@Observable` properties don't offer a plain
+        // change callback outside of SwiftUI's own view updates, so this
+        // panel's visibility/position is kept in sync by polling instead.
+        syncGroupHoverPanel()
+
+        guard themeStore.autoHideEnabled else {
+            retractWorkItem?.cancel()
+            retractWorkItem = nil
+            if isRetracted { reveal() }
+            return
+        }
+        guard let screen = DockController.dockScreen else { return }
+        let mouse = NSEvent.mouseLocation
+        // The "hot edge": the very bottom row of pixels on the bar's own
+        // screen, the same trigger Windows' own auto-hidden taskbar uses.
+        let atHotEdge = mouse.y <= screen.frame.minY + 2 && mouse.x >= screen.frame.minX && mouse.x <= screen.frame.maxX
+        let overBar = frame.contains(mouse)
+        // Never retract out from under an open start menu or a live drag
+        // (spring-loading, reordering) — both would be left stranded.
+        if atHotEdge || overBar || startMenuState.isPresented {
+            retractWorkItem?.cancel()
+            retractWorkItem = nil
+            if isRetracted { reveal() }
+        } else if !isRetracted && retractWorkItem == nil {
+            let work = DispatchWorkItem { [weak self] in
+                self?.retract()
+                self?.retractWorkItem = nil
+            }
+            retractWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.autoHideRetractDelay, execute: work)
+        }
+    }
+
+    private func retract() {
+        guard !isRetracted, themeStore.autoHideEnabled else { return }
+        isRetracted = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            self.animator().setFrame(self.retractedFrame(), display: true)
+        }
+    }
+
+    private func reveal() {
+        isRetracted = false
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            self.animator().setFrame(Self.frame(forHeight: self.themeStore.effectivePanelHeight), display: true)
+        }
+    }
+
+    /// The bar's frame when retracted: shifted down so only a thin sliver
+    /// peeks above the screen's bottom edge — that sliver, and the hot
+    /// edge itself, are what a hover reveals it again from.
+    private func retractedFrame() -> NSRect {
+        var retracted = Self.frame(forHeight: themeStore.effectivePanelHeight)
+        retracted.origin.y -= (retracted.height - Self.autoHideRevealSliver)
+        return retracted
     }
 
     private static func frame(forHeight height: CGFloat) -> NSRect {

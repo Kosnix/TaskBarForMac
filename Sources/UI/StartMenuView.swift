@@ -53,11 +53,16 @@ struct StartMenuView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PanelBackground(tokens: tokens, liquidGlassEnabled: liquidGlassEnabled, liquidGlassIntensity: liquidGlassIntensity, showTopBorder: false))
         .foregroundStyle(Color(hex: tokens.colors.textPrimary))
+        // Only the top corners — the bottom edge sits flush against the
+        // taskbar, so rounding it too would leave a visible gap/seam there.
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: Self.topCornerRadius, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: Self.topCornerRadius))
         .onAppear {
             state.selectedIndex = 0
             state.focusedRegion = .grid
         }
     }
+
+    private static let topCornerRadius: CGFloat = 10
 
     /// Kickoff's "leave" row: session control for the current login session.
     private var sessionFooter: some View {
@@ -275,7 +280,7 @@ struct StartMenuView: View {
         .contextMenu {
             Button(windowManager.isPinned(bundleIdentifier: app.bundleIdentifier) ? L("taskbar.unpin") : L("taskbar.pin")) {
                 windowManager.isPinned(bundleIdentifier: app.bundleIdentifier)
-                    ? windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier)
+                    ? windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
                     : windowManager.pin(url: app.url, displayName: app.displayName)
             }
             Divider()

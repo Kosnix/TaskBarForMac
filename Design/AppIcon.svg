@@ -1,0 +1,47 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2E3A4E"/>
+      <stop offset="55%" stop-color="#1B2432"/>
+      <stop offset="100%" stop-color="#11161F"/>
+    </linearGradient>
+    <linearGradient id="barGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2A3140" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#181D26" stop-opacity="0.95"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="18%" r="65%">
+      <stop offset="0%" stop-color="#4A5A78" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#4A5A78" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- macOS-style rounded-square canvas, full bleed -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#glow)"/>
+
+  <!-- Taskbar, anchored to the bottom edge like the app's own panel -->
+  <rect x="0" y="792" width="1024" height="232" fill="url(#barGloss)"/>
+  <rect x="0" y="792" width="1024" height="4" fill="#4A5A78" opacity="0.55"/>
+
+  <!-- Start button -->
+  <rect x="76" y="838" width="140" height="140" rx="34" fill="#3DAEE9"/>
+  <rect x="112" y="874" width="30" height="30" rx="7" fill="#FFFFFF"/>
+  <rect x="152" y="874" width="30" height="30" rx="7" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="112" y="914" width="30" height="30" rx="7" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="152" y="914" width="30" height="30" rx="7" fill="#FFFFFF" opacity="0.7"/>
+
+  <!-- Running-app icons -->
+  <rect x="284" y="838" width="140" height="140" rx="34" fill="#5FD38A"/>
+  <rect x="452" y="838" width="140" height="140" rx="34" fill="#F5A623"/>
+  <rect x="620" y="838" width="140" height="140" rx="34" fill="#B07AE8"/>
+
+  <!-- Minimized-window indicator dots, matching the taskbar's own convention -->
+  <circle cx="354" cy="1004" r="9" fill="#C7D0DE"/>
+  <circle cx="690" cy="1004" r="9" fill="#C7D0DE"/>
+
+  <!-- Trailing "more" module, echoing the bar's right-side zone -->
+  <rect x="808" y="864" width="140" height="88" rx="26" fill="#232B38"/>
+  <circle cx="838" cy="908" r="10" fill="#7C8797"/>
+  <circle cx="878" cy="908" r="10" fill="#7C8797"/>
+  <circle cx="918" cy="908" r="10" fill="#7C8797"/>
+</svg>

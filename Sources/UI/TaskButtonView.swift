@@ -43,13 +43,30 @@ struct TaskButtonView: View {
             }
         }
         .padding(.horizontal, tokens.spacing.edgePadding)
-        .frame(width: width, height: tokens.panel.height - 8)
+        // Left-aligned, not the default center — see `GroupedTaskButtonView`
+        // for why this specific change matters (a wide allocated `width`
+        // with modest content otherwise leaves empty space before the icon
+        // too, not just after it).
+        .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
         .background(backgroundColor)
-        .overlay(activeIndicator, alignment: .bottom)
+        // Positioned by hand (not a plain `.overlay` on the icon) — the
+        // icon sits inside an `HStack` whose default cross-axis alignment
+        // is `.center`, so when the button is taller than the icon (icon
+        // shrunk by the fixed 16pt inset, button only by 8pt) the icon
+        // itself floats vertically centered within that extra height —
+        // and a dot attached to the icon would float right along with it,
+        // away from the button's true bottom edge. Horizontal position
+        // still tracks the icon (its known offset from the leading edge:
+        // the button's own edge padding, then half the icon's width);
+        // vertical position is pinned to the button's bottom edge only.
+        .overlay(alignment: .bottomLeading) {
+            minimizedDot
+                .offset(x: tokens.spacing.edgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
+        }
+        .overlay(activeUnderline, alignment: .bottom)
         .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
-        .opacity(window.isMinimized ? 0.6 : 1.0)
         .onHover { isHovering in
             windowManager.hoveredWindowID = isHovering ? window.id : (windowManager.hoveredWindowID == window.id ? nil : windowManager.hoveredWindowID)
         }
@@ -90,9 +107,28 @@ struct TaskButtonView: View {
         return .clear
     }
 
+    private static let minimizedDotSize: CGFloat = 4
+    private static let minimizedDotBottomInset: CGFloat = 2
+
+    // A minimized window used to just dim its whole button (opacity 0.6) —
+    // replaced with a small dot underneath, matching the real Dock's own
+    // "open app" indicator convention, so a minimized window still reads
+    // clearly (icon, label) and only the dot communicates its state.
     @ViewBuilder
-    private var activeIndicator: some View {
-        if tokens.taskButton.indicatorStyle == "underline" && !window.isMinimized {
+    private var minimizedDot: some View {
+        if window.isMinimized {
+            Circle()
+                .fill(Color(hex: tokens.colors.textSecondary))
+                .frame(width: Self.minimizedDotSize, height: Self.minimizedDotSize)
+        }
+    }
+
+    /// The theme's "active tab" underline (a different indicator style from
+    /// the minimized dot) genuinely spans the whole button, not just the
+    /// icon, so it stays on the outer frame.
+    @ViewBuilder
+    private var activeUnderline: some View {
+        if !window.isMinimized && tokens.taskButton.indicatorStyle == "underline" {
             Rectangle()
                 .fill(Color(hex: tokens.colors.accent))
                 .frame(height: 2)

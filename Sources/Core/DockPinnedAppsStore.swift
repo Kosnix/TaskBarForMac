@@ -35,6 +35,21 @@ extension PinnedApp: Hashable {
 /// pinning/unpinning from our taskbar or start menu stays in sync with the
 /// (now hidden) native Dock — matching the app's whole premise: nothing
 /// pinned there should become hard to reach.
+///
+/// A "snapshot persistent-apps, empty it, restore on quit" mode was tried
+/// twice (to stop the real Dock's own name tooltips from appearing above
+/// our panel when a pinned icon is hovered) and reverted both times: a
+/// pinned app went missing from the real Dock across an empty→restore
+/// round-trip during testing — once with a suspected (partially addressed)
+/// double-Dock-restart race, and again afterwards despite that fix, so the
+/// actual cause was never pinned down with confidence. It also turned out
+/// not to fully solve the tooltip problem anyway, since a *running* app
+/// always gets a Dock icon regardless of `persistent-apps`. Real `autohide`
+/// (see `DockController`) replaces it instead: the real Dock's window is
+/// never even on-screen, so this file goes back to being exactly what it
+/// looks like — plain, always-live read/write against the real Dock,
+/// nothing more. Live pinned-app data isn't something to keep
+/// experimenting on.
 enum DockPinnedAppsStore {
     private static let dockDomain = "com.apple.dock" as CFString
     private static let key = "persistent-apps" as CFString

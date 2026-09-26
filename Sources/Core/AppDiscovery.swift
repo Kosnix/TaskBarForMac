@@ -150,11 +150,17 @@ final class AppDiscovery {
 
         guard let bundle = Bundle(url: url) else { return nil }
 
-        // Background agents / UI-less helpers (LSUIElement/LSBackgroundOnly)
-        // are registered as real .app bundles with LaunchServices but were
-        // never meant to be launched from an app menu.
-        guard !isTruthyFlag(bundle, "LSUIElement"), !isTruthyFlag(bundle, "LSBackgroundOnly") else { return nil }
-
+        // `LSUIElement`/`LSBackgroundOnly` used to exclude every app that
+        // sets either flag, meant to filter out internal helper/agent
+        // bundles — but plenty of real, top-level apps in /Applications
+        // set the same flag deliberately because they're *menu-bar-only*
+        // by design (Tailscale, Bartender, Rectangle, …), not because
+        // they're junk. Those belong in the launcher; a user who installed
+        // one wants to find and quit it from somewhere. The actual
+        // internal helpers this was trying to keep out are already
+        // excluded on their own: nested bundles are skipped just above,
+        // and `/System/Library/CoreServices` (where most of them live)
+        // isn't scanned at all.
         let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
             ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
             ?? url.deletingPathExtension().lastPathComponent
@@ -171,15 +177,6 @@ final class AppDiscovery {
         )
     }
 
-    /// Info.plist booleans are sometimes stored as string/number rather than
-    /// an actual boolean plist value; this reads any of those forms.
-    private static func isTruthyFlag(_ bundle: Bundle, _ key: String) -> Bool {
-        guard let value = bundle.object(forInfoDictionaryKey: key) else { return false }
-        if let boolValue = value as? Bool { return boolValue }
-        if let numberValue = value as? NSNumber { return numberValue.boolValue }
-        if let stringValue = value as? String { return (stringValue as NSString).boolValue }
-        return false
-    }
 
     /// Maps `public.app-category.*` identifiers to a small, stable set of
     /// internal category keys, grouped the way Kickoff's category list

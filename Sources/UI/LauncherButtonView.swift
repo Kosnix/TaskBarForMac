@@ -19,19 +19,16 @@ struct LauncherButtonView: View {
     private var iconSize: CGFloat { max(12, tokens.panel.height - 16) }
 
     var body: some View {
+        // Icon only, always — "icon + name" only ever applies to actually
+        // open windows; a pinned-but-closed launcher stays icon-only
+        // regardless, matching how the real Dock never shows names either.
         HStack(spacing: 6) {
             Image(nsImage: app.icon)
                 .resizable()
                 .frame(width: iconSize, height: iconSize)
-            if width >= iconSize + 50 {
-                Text(app.displayName)
-                    .font(.system(size: tokens.typography.fontSize))
-                    .foregroundStyle(Color(hex: tokens.colors.textSecondary))
-                    .lineLimit(1)
-            }
         }
         .padding(.horizontal, tokens.spacing.edgePadding)
-        .frame(width: width, height: tokens.panel.height - 8)
+        .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
         .background(isHovered ? Color(hex: tokens.colors.accent).opacity(0.3) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
         .contentShape(Rectangle())
@@ -42,7 +39,7 @@ struct LauncherButtonView: View {
         }
         .contextMenu {
             Button(L("taskbar.unpin")) {
-                windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier)
+                windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
             }
         }
         .taskReorderable(bundleIdentifier: app.bundleIdentifier, windowManager: windowManager) {

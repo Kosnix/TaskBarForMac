@@ -35,6 +35,16 @@ enum Localization {
 
     private static var cachedBundle: Bundle?
 
+    /// The `Locale` matching whatever language is actually in effect (the
+    /// in-app override, or the resolved system language) — used to format
+    /// dates/times so they follow the *chosen* language rather than
+    /// whatever the system's own region setting happens to be (which can
+    /// disagree, e.g. an app language override with the Mac itself set to
+    /// a different system language).
+    static var effectiveLocale: Locale {
+        Locale(identifier: languageOverride ?? preferredSupportedLanguageCode())
+    }
+
     static func string(_ key: String) -> String {
         resolvedBundle.localizedString(forKey: key, value: nil, table: nil)
     }

@@ -4,31 +4,45 @@
 "button.cancel" = "Отмена";
 
 /* Personalization menu */
+"menu.settings" = "Настройки…";
 "menu.theme" = "Тема";
 "menu.bar_size" = "Размер панели";
 "menu.open_apps" = "Открытые приложения";
 "menu.liquid_glass" = "Фон Liquid Glass";
+"menu.liquid_glass_intensity" = "Интенсивность Liquid Glass";
+"menu.auto_hide" = "Автоматически скрывать панель задач";
 "menu.language" = "Язык";
 "menu.quit" = "Закрыть панель задач";
 "language.system" = "Системный ({lang})";
 
-"size.tiny" = "Очень маленькая";
-"size.small" = "Маленькая";
-"size.medium" = "Средняя";
-"size.large" = "Большая";
-"size.xlarge" = "Очень большая";
-"size.huge" = "Огромная";
-"size.increase" = "Увеличить (+2px)";
-"size.decrease" = "Уменьшить (-2px)";
-"size.custom" = "Свой размер…";
-"size.hint" = "Совет: перетащите верхний край панели, чтобы изменить размер свободно (от 22 до 160 пикс.).";
-
 "display.icon_and_label" = "Значок и имя";
 "display.icon_only" = "Только значки";
 
-/* Custom size alert */
-"alert.custom_size.title" = "Свой размер панели";
-"alert.custom_size.message" = "Высота в пикселях (от {min} до {max}).";
+/* Settings window */
+"settings.window_title" = "Настройки";
+"settings.color_scheme" = "Режим оформления";
+"settings.color_scheme.light" = "Светлый";
+"settings.color_scheme.dark" = "Тёмный";
+"settings.color_scheme.system" = "Автоматически";
+"settings.section.layout" = "Расположение";
+"settings.alignment" = "Выравнивание значков";
+"settings.alignment.left" = "По левому краю";
+"settings.alignment.center" = "По центру";
+"settings.alignment.center_with_start" = "По центру вместе с кнопкой Пуск";
+"settings.section.clock" = "Часы";
+"settings.clock.show" = "Показывать часы";
+"settings.clock.show_date" = "Показывать дату";
+"settings.section.appearance" = "Внешний вид";
+"settings.section.general" = "Общие";
+"settings.launch_at_login" = "Запускать при входе в систему";
+"settings.section.start_menu" = "Меню Пуск";
+"settings.start_menu_style" = "Стиль";
+"settings.start_menu_style.kickoff" = "Kickoff";
+"settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.spotlight" = "Spotlight";
+"start.pinned" = "Закреплённые";
+"start.all_apps" = "Все приложения";
+"start.search_results" = "Результаты поиска";
 
 /* Taskbar */
 "accessibility.prompt" = "Разрешить доступ Универсального доступа для управления окнами →";
@@ -53,11 +67,14 @@
 "search.placeholder" = "Поиск приложения…";
 
 /* Start menu app grid */
+"alert.unpin.title" = "Открепить «{name}» от панели задач?";
+"alert.unpin.message" = "Приложение будет удалено с панели задач и из Dock.";
 "app.trash" = "Переместить в корзину";
 "alert.trash_app.title" = "Удалить «{name}»?";
 "alert.trash_app.message" = "Приложение будет перемещено в корзину.";
 "alert.uninstall_failed.title" = "Не удалось удалить «{name}»";
 "alert.uninstall_failed.message" = "Возможно, это приложение защищено системой.\n{error}";
+
 
 /* Dock recovery */
 "alert.dock_recovery.title" = "Dock остался изменённым";

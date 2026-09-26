@@ -59,6 +59,14 @@ final class WindowManager {
     /// plain, macro-free SwiftUI views. See ShortcutsManager for why.
     var hoveredWindowID: String?
     var hoveredGroupID: String?
+    /// Each grouped task button's own frame, in `TaskbarView`'s shared
+    /// `"taskbarRoot"` coordinate space — kept live so the hover window-list
+    /// popup (rendered at `TaskbarView`'s top level instead of as a
+    /// SwiftUI `.popover`, which rendered stretched across the whole bar
+    /// instead of anchored to its own button inside this app's
+    /// non-activating, unusually-leveled panel) knows where to position
+    /// itself for whichever group is currently hovered.
+    var groupButtonFrames: [String: CGRect] = [:]
     private var hoverClearWorkItem: DispatchWorkItem?
     private var refreshTimer: Timer?
 
@@ -144,9 +152,22 @@ final class WindowManager {
         refreshPinnedApps()
     }
 
-    func unpin(url: URL, bundleIdentifier: String?) {
+    /// Asks for confirmation first — unlike pinning, unpinning removes
+    /// something the user (or a previous session) deliberately put there,
+    /// and it's one click away in a context menu with no undo.
+    func unpin(url: URL, bundleIdentifier: String?, displayName: String) {
+        guard confirmUnpin(displayName: displayName) else { return }
         DockPinnedAppsStore.unpin(url: url, bundleIdentifier: bundleIdentifier)
         refreshPinnedApps()
+    }
+
+    private func confirmUnpin(displayName: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = L("alert.unpin.title", ["name": displayName])
+        alert.informativeText = L("alert.unpin.message")
+        alert.addButton(withTitle: L("taskbar.unpin"))
+        alert.addButton(withTitle: L("button.cancel"))
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Convenience for task buttons, which only know a running window's
@@ -154,7 +175,7 @@ final class WindowManager {
     func togglePin(pid: pid_t, bundleIdentifier: String?, displayName: String) {
         guard let url = NSRunningApplication(processIdentifier: pid)?.bundleURL else { return }
         if isPinned(bundleIdentifier: bundleIdentifier) {
-            unpin(url: url, bundleIdentifier: bundleIdentifier)
+            unpin(url: url, bundleIdentifier: bundleIdentifier, displayName: displayName)
         } else {
             pin(url: url, displayName: displayName)
         }
@@ -250,6 +271,56 @@ final class WindowManager {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
     }
 
+    /// Real `autohide` (see `DockController`) reclaims the Dock's screen
+    /// space entirely, so a maximized/zoomed window can size itself all the
+    /// way to the bottom of the screen — right where our panel sits. This
+    /// nudges any window on the Dock's screen whose bottom edge dips into
+    /// the panel's area back above it, by shrinking its height (never
+    /// moving its top edge), the same outcome a real reserved `visibleFrame`
+    /// would have produced. Cheap to call frequently: it's a no-op AX read
+    /// for every window that isn't currently overlapping.
+    func reclaimReservedSpace(panelHeight: CGFloat) {
+        guard AXIsProcessTrusted(),
+              let dockScreen = DockController.dockScreen,
+              let primaryScreen = NSScreen.screens.first else { return }
+
+        // AX coordinates are global, top-left-of-the-primary-screen-origin,
+        // Y increasing downward — flipping by the primary screen's height
+        // converts a Y into the bottom-left-origin AppKit space `NSScreen`
+        // frames use, without needing to know which physical screen a
+        // window is on ahead of time.
+        let primaryHeight = primaryScreen.frame.height
+        let reservedTop = dockScreen.frame.minY + panelHeight
+
+        for window in windows where !window.isMinimized {
+            guard
+                let axPosition = Self.copyPointAttribute(window.axElement, kAXPositionAttribute),
+                let axSize = Self.copySizeAttribute(window.axElement, kAXSizeAttribute)
+            else { continue }
+
+            let appKitFrame = CGRect(
+                x: axPosition.x,
+                y: primaryHeight - axPosition.y - axSize.height,
+                width: axSize.width,
+                height: axSize.height
+            )
+            // Only windows actually on the Dock's own screen can overlap
+            // our panel — a window on another display might coincidentally
+            // read a Y below `reservedTop` without being anywhere near it.
+            guard dockScreen.frame.intersects(appKitFrame), appKitFrame.minY < reservedTop else { continue }
+
+            let overlap = reservedTop - appKitFrame.minY
+            let newHeight = axSize.height - overlap
+            // Never shrink a window into uselessness — leaves genuinely
+            // tiny/odd windows alone rather than fighting their own layout.
+            guard newHeight >= 100 else { continue }
+
+            var newSize = CGSize(width: axSize.width, height: newHeight)
+            guard let sizeValue = AXValueCreate(.cgSize, &newSize) else { continue }
+            AXUIElementSetAttributeValue(window.axElement, kAXSizeAttribute as CFString, sizeValue)
+        }
+    }
+
     func refresh() {
         guard AXIsProcessTrusted() else {
             windows = []
@@ -302,6 +373,25 @@ final class WindowManager {
         // entirely (and with it, any way to bring it back), re-verify
         // anything we tracked last pass that didn't reappear this time by
         // querying its cached AXUIElement directly.
+        //
+        // Root cause of a confirmed duplicate-entry bug (a single Claude
+        // window appearing twice, one stuck "minimized"): `_AXUIElementGetWindow`
+        // can transiently fail for one refresh cycle — observed happening
+        // right as a native Open/Save panel sheet attaches to the window —
+        // which makes `stableID` fall back to a `"pid-title"` id instead of
+        // the usual `"cg-<CGWindowID>"` one for that single cycle. Once the
+        // AX tree settles, the *same* physical window resolves back to its
+        // normal `cg-…` id via the fresh scan above, but the old
+        // `"pid-title"` entry never naturally goes away: its `axElement`
+        // reference is still the same live, real window, so
+        // `AXUIElementCopyAttributeValue` on it keeps succeeding forever,
+        // endlessly re-adding it here as a second, separate, permanently
+        // "stale" entry for a window that's actually still right there.
+        // Recomputing the id fresh (instead of trusting the one it was
+        // filed under originally) is what lets this self-correct: once
+        // `_AXUIElementGetWindow` succeeds again, the recomputed id matches
+        // the fresh scan's own `cg-…` id, `seenIDs` already has it, and
+        // this stale copy is correctly dropped instead of kept forever.
         for previous in windows {
             guard runningPIDs.contains(previous.pid) else { continue } // app quit: drop it
             guard !seenIDs.contains(previous.id) else { continue } // already re-collected fresh
@@ -310,10 +400,36 @@ final class WindowManager {
             let stillValid = AXUIElementCopyAttributeValue(previous.axElement, kAXTitleAttribute as CFString, &titleValue) == .success
             guard stillValid else { continue } // window truly closed: drop it
 
-            var reAdded = previous
-            reAdded.isMinimized = Self.copyBoolAttribute(previous.axElement, kAXMinimizedAttribute) ?? true
+            let currentTitle = (titleValue as? String) ?? previous.title
+
+            // Belt-and-suspenders: if this cycle's fresh scan already found
+            // a *different*, genuinely live window for the same process
+            // with the same title, treat this stale entry as that same
+            // window under an old id — not a second, coincidentally
+            // identically-titled window — regardless of what the id
+            // recomputation below says. Needed because a stale
+            // `AXUIElement` reference's private windowID lookup can fail
+            // *permanently* for that specific reference, not just for one
+            // transient cycle, in which case recomputing the id alone
+            // keeps producing the same stale fallback id forever.
+            let alreadyRepresented = collected.contains { $0.pid == previous.pid && $0.title == currentTitle }
+            guard !alreadyRepresented else { continue }
+
+            let recomputedID = Self.stableID(for: previous.axElement, pid: previous.pid, title: currentTitle)
+            guard !seenIDs.contains(recomputedID) else { continue } // same window as one already found fresh, just under its old id
+
+            let reAdded = AppWindow(
+                id: recomputedID,
+                axElement: previous.axElement,
+                pid: previous.pid,
+                bundleIdentifier: previous.bundleIdentifier,
+                title: currentTitle,
+                appName: previous.appName,
+                appIcon: previous.appIcon,
+                isMinimized: Self.copyBoolAttribute(previous.axElement, kAXMinimizedAttribute) ?? true
+            )
             collected.append(reAdded)
-            seenIDs.insert(previous.id)
+            seenIDs.insert(recomputedID)
         }
 
         windows = collected
@@ -378,25 +494,14 @@ final class WindowManager {
         refresh()
     }
 
-    /// The set of window ids minimized by the last `minimizeAll()` call, so
-    /// pressing the button again restores exactly those windows instead of
-    /// minimizing (already-minimized) everything again.
-    private var lastShowDesktopWindowIDs: Set<String> = []
-
-    /// "Minimize all", toggled: press once to minimize everything visible,
-    /// press again to bring back exactly what that press hid.
+    /// "Minimize all": minimizes whatever isn't already minimized. A no-op
+    /// (not a "restore everything" toggle any more) when everything's
+    /// already minimized — pressing it again shouldn't bring windows back.
     func minimizeAll() {
-        if !lastShowDesktopWindowIDs.isEmpty {
-            for window in windows where lastShowDesktopWindowIDs.contains(window.id) {
-                AXUIElementSetAttributeValue(window.axElement, kAXMinimizedAttribute as CFString, false as CFTypeRef)
-            }
-            lastShowDesktopWindowIDs = []
-        } else {
-            let toMinimize = windows.filter { !$0.isMinimized }
-            for window in toMinimize {
-                AXUIElementSetAttributeValue(window.axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef)
-            }
-            lastShowDesktopWindowIDs = Set(toMinimize.map(\.id))
+        let toMinimize = windows.filter { !$0.isMinimized }
+        guard !toMinimize.isEmpty else { return }
+        for window in toMinimize {
+            AXUIElementSetAttributeValue(window.axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef)
         }
         refresh()
     }
@@ -441,7 +546,38 @@ final class WindowManager {
             let subrole = copyStringAttribute(element, kAXSubroleAttribute) ?? ""
             return subrole == (kAXStandardWindowSubrole as String)
         }
+
+        // Some apps (Electron ones especially — this is how a single-window
+        // Claude could show up "grouped" with a phantom second entry)
+        // expose a hidden helper/GPU-process window via AX that has no
+        // title of its own, so `title` silently fell back to the app's
+        // name instead — making it look like a second, identically-named
+        // real window. Those are reliably near-zero-size; a real window
+        // never is. Only rejects when the size was actually readable, so
+        // an app that genuinely doesn't expose `kAXSizeAttribute` for some
+        // other reason isn't punished for it.
+        if let size = copySizeAttribute(element, kAXSizeAttribute), size.width < 50 || size.height < 50 {
+            return false
+        }
         return true
+    }
+
+    private static func copySizeAttribute(_ element: AXUIElement, _ attribute: String) -> CGSize? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        guard result == .success, let value, CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        var size = CGSize.zero
+        guard AXValueGetValue((value as! AXValue), .cgSize, &size) else { return nil }
+        return size
+    }
+
+    private static func copyPointAttribute(_ element: AXUIElement, _ attribute: String) -> CGPoint? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        guard result == .success, let value, CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        var point = CGPoint.zero
+        guard AXValueGetValue((value as! AXValue), .cgPoint, &point) else { return nil }
+        return point
     }
 
     private static func copyArrayAttribute(_ element: AXUIElement, _ attribute: String) -> [AXUIElement]? {
