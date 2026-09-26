@@ -8,6 +8,10 @@
   Une barre des tâches façon KDE Plasma qui remplace le Dock de macOS.
 </p>
 
+<p align="center">
+  🇫🇷 Français | 🇬🇧 <a href="README.en.md">English</a>
+</p>
+
 ## Présentation
 
 TaskbarReplacement remplace le Dock macOS par une vraie barre des tâches à la Windows/KDE : icônes des applications ouvertes, bouton démarrer avec menu d'applications, horloge, épinglage — le tout personnalisable via un système de thèmes en dossiers JSON, sans toucher au code.
