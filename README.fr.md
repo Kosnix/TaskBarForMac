@@ -34,6 +34,20 @@ Projet personnel, pas affilié à KDE ni à Microsoft — juste inspiré de leur
 
 Tous les réglages sont accessibles par clic droit sur la barre → **Paramètres…**.
 
+## Captures d'écran
+
+**Windows 7**
+![Thème Windows 7](Design/screenshots/windows-7.webp)
+
+**macOS**
+![Thème macOS](Design/screenshots/macos.webp)
+
+**Breeze (KDE)**
+![Thème Breeze](Design/screenshots/breeze.webp)
+
+**Windows 11** (icônes centrées)
+![Thème Windows 11, icônes centrées](Design/screenshots/windows-11.webp)
+
 ## Installation
 
 1. Télécharger `TaskbarReplacement-Installer.dmg` depuis la [dernière release](../../releases/latest).

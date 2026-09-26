@@ -34,6 +34,20 @@ Personal project, not affiliated with KDE or Microsoft — just inspired by thei
 
 Every setting is available by right-clicking the bar → **Settings…**.
 
+## Screenshots
+
+**Windows 7**
+![Windows 7 theme](Design/screenshots/windows-7.webp)
+
+**macOS**
+![macOS theme](Design/screenshots/macos.webp)
+
+**Breeze (KDE)**
+![Breeze theme](Design/screenshots/breeze.webp)
+
+**Windows 11** (centered icons)
+![Windows 11 theme, centered icons](Design/screenshots/windows-11.webp)
+
 ## Installation
 
 1. Download `TaskbarReplacement-Installer.dmg` from the [latest release](../../releases/latest).
