@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 /// Windows 11's own Start menu layout: search on top, no category sidebar —
-/// just a grid of taskbar-pinned apps under "Épinglé", with a toggle to
-/// show every discovered app instead, and an account-name/power-button
-/// footer. An alternative to the default Kickoff-style layout (see
-/// `StartMenuView`), picked via `ThemeStore.startMenuStyle`.
+/// just a grid of every installed app, most-recently-launched first, and an
+/// account-name/power-button footer. An alternative to the default
+/// Kickoff-style layout (see `StartMenuView`), picked via
+/// `ThemeStore.startMenuStyle`.
 struct Windows11StartMenuView: View {
     let appDiscovery: AppDiscovery
     let windowManager: WindowManager
@@ -24,66 +24,16 @@ struct Windows11StartMenuView: View {
     /// request, rather than matching them like the Kickoff layout does.
     private var iconSize: CGFloat { tokens.taskbarIconSize * 2 }
 
-    /// A single grid cell's app, whichever list it came from — unifies
-    /// `PinnedApp` (the default, empty-search view) and `InstalledApp`
-    /// (search results, or "Toutes les applications") so one grid can
-    /// render either without duplicating layout code.
-    private enum DisplayApp: Identifiable {
-        case pinned(PinnedApp)
-        case installed(InstalledApp)
-
-        var id: String {
-            switch self {
-            case .pinned(let app): "p-\(app.id)"
-            case .installed(let app): "i-\(app.id)"
-            }
-        }
-        var displayName: String {
-            switch self {
-            case .pinned(let app): app.displayName
-            case .installed(let app): app.displayName
-            }
-        }
-        var icon: NSImage {
-            switch self {
-            case .pinned(let app): app.icon
-            case .installed(let app): app.icon
-            }
-        }
-        var bundleIdentifier: String? {
-            switch self {
-            case .pinned(let app): app.bundleIdentifier
-            case .installed(let app): app.bundleIdentifier
-            }
-        }
-        var url: URL {
-            switch self {
-            case .pinned(let app): app.url
-            case .installed(let app): app.url
-            }
-        }
-    }
-
-    /// Every installed app (already alphabetical — see `AppDiscovery.apps`)
-    /// by default, rather than the Dock's own pinned order — the "Épinglé"
-    /// toggle is there for whoever wants that view back, but isn't the
-    /// default the way real Windows 11 has it. Typing always searches
-    /// every installed app regardless of the toggle's state.
-    private var displayedApps: [DisplayApp] {
+    /// Search results when there's a query, otherwise every installed app,
+    /// most-recently-launched-through-this-app first (see
+    /// `LaunchHistoryStore.sortedByRecency`) — no more separate "Épinglé"
+    /// view, since the taskbar itself already shows pinned apps.
+    private var displayedApps: [InstalledApp] {
         if !state.query.isEmpty {
             return appDiscovery.apps
                 .filter { $0.displayName.localizedCaseInsensitiveContains(state.query) }
-                .map(DisplayApp.installed)
         }
-        if state.windows11ShowPinnedOnly {
-            return windowManager.pinnedApps.map(DisplayApp.pinned)
-        }
-        return appDiscovery.apps.map(DisplayApp.installed)
-    }
-
-    private var sectionTitle: String {
-        if !state.query.isEmpty { return L("start.search_results") }
-        return state.windows11ShowPinnedOnly ? L("start.pinned") : L("start.all_apps")
+        return LaunchHistoryStore.sortedByRecency(appDiscovery.apps, bundleIdentifier: \.bundleIdentifier)
     }
 
     var body: some View {
@@ -91,11 +41,8 @@ struct Windows11StartMenuView: View {
             searchField
             ScrollViewReader { proxy in
                 ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id)) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        sectionHeader
-                        appGrid
-                    }
-                    .padding(20)
+                    appGrid
+                        .padding(20)
                 }
                 .onChange(of: state.selectedIndex) { _, newIndex in
                     guard displayedApps.indices.contains(newIndex) else { return }
@@ -159,28 +106,6 @@ struct Windows11StartMenuView: View {
         .padding(16)
     }
 
-    private var sectionHeader: some View {
-        HStack {
-            Text(sectionTitle)
-                .font(.system(size: tokens.typography.fontSize, weight: .semibold))
-            Spacer()
-            if state.query.isEmpty {
-                Button {
-                    state.windows11ShowPinnedOnly.toggle()
-                } label: {
-                    HStack(spacing: 2) {
-                        Text(state.windows11ShowPinnedOnly ? L("start.all_apps") : L("start.pinned"))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10))
-                    }
-                    .font(.system(size: tokens.typography.fontSize - 1))
-                    .foregroundStyle(Color(hex: tokens.colors.accent))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
     private var appGrid: some View {
         LazyVGrid(columns: gridColumns, spacing: 16) {
             ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, app in
@@ -190,7 +115,7 @@ struct Windows11StartMenuView: View {
         }
     }
 
-    private func appCell(_ app: DisplayApp, isSelected: Bool) -> some View {
+    private func appCell(_ app: InstalledApp, isSelected: Bool) -> some View {
         Button {
             state.selectedIndex = displayedApps.firstIndex(where: { $0.id == app.id }) ?? state.selectedIndex
             launch(app)
@@ -223,14 +148,9 @@ struct Windows11StartMenuView: View {
         }
     }
 
-    private func launch(_ app: DisplayApp) {
-        switch app {
-        case .pinned(let pinned):
-            windowManager.launch(pinned)
-        case .installed(let installed):
-            LaunchHistoryStore.recordLaunch(bundleIdentifier: installed.bundleIdentifier)
-            NSWorkspace.shared.openApplication(at: installed.url, configuration: NSWorkspace.OpenConfiguration())
-        }
+    private func launch(_ app: InstalledApp) {
+        LaunchHistoryStore.recordLaunch(bundleIdentifier: app.bundleIdentifier)
+        NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
         onLaunch()
     }
 

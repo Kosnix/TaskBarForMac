@@ -17,8 +17,8 @@
 "icon_edit.restore_original" = "Восстановить исходный значок";
 "icon_edit.change" = "Изменить значок";
 "menu.open_apps" = "Открытые приложения";
-"menu.liquid_glass" = "Фон Liquid Glass";
-"menu.liquid_glass_intensity" = "Интенсивность Liquid Glass";
+"menu.liquid_glass" = "Прозрачный фон";
+"menu.liquid_glass_intensity" = "Интенсивность прозрачности";
 "menu.auto_hide" = "Автоматически скрывать панель задач";
 "menu.language" = "Язык";
 "menu.quit" = "Закрыть панель задач";
@@ -50,10 +50,6 @@
 "settings.start_menu_style.windows11" = "Windows 11";
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
-"start.pinned" = "Закреплённые";
-"start.all_apps" = "Все приложения";
-"start.all_programs" = "Все программы";
-"start.search_results" = "Результаты поиска";
 "start.documents" = "Документы";
 "start.pictures" = "Изображения";
 "start.music" = "Музыка";

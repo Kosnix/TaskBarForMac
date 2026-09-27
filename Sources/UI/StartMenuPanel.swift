@@ -61,9 +61,10 @@ final class StartMenuPanel: NSPanel {
         handle.onDrag = { [weak themeStore] dWidth, dHeight in
             guard let themeStore else { return }
             let current = themeStore.effectiveStartMenuSize
+            let minSize = themeStore.effectiveStartMenuMinSize
             let newSize = CGSize(
-                width: min(ThemeStore.startMenuMaxSize.width, max(ThemeStore.startMenuMinSize.width, current.width + dWidth)),
-                height: min(ThemeStore.startMenuMaxSize.height, max(ThemeStore.startMenuMinSize.height, current.height + dHeight))
+                width: min(ThemeStore.startMenuMaxSize.width, max(minSize.width, current.width + dWidth)),
+                height: min(ThemeStore.startMenuMaxSize.height, max(minSize.height, current.height + dHeight))
             )
             themeStore.startMenuSizeOverride = newSize
         }

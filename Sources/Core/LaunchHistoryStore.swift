@@ -25,4 +25,23 @@ enum LaunchHistoryStore {
     private static func allTimestamps() -> [String: Double] {
         UserDefaults.standard.dictionary(forKey: key) as? [String: Double] ?? [:]
     }
+
+    /// Every start menu style shows the same "most recently launched
+    /// first" ordering now, not just `Windows7StartMenuView` — shared here
+    /// instead of copied three times. Apps never launched through this app
+    /// keep `bundleIdentifiers`' own relative order (typically
+    /// `AppDiscovery`'s alphabetical one), after all the ones that do have
+    /// a recorded timestamp.
+    static func sortedByRecency<App>(_ apps: [App], bundleIdentifier: (App) -> String?) -> [App] {
+        apps.enumerated()
+            .sorted { lhs, rhs in
+                switch (lastLaunchTimestamp(bundleIdentifier: bundleIdentifier(lhs.element)), lastLaunchTimestamp(bundleIdentifier: bundleIdentifier(rhs.element))) {
+                case (let l?, let r?): return l > r
+                case (nil, nil): return lhs.offset < rhs.offset
+                case (.some, nil): return true
+                case (nil, .some): return false
+                }
+            }
+            .map(\.element)
+    }
 }

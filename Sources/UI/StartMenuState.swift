@@ -20,8 +20,6 @@ final class StartMenuState {
                 query = ""
                 selectedCategory = nil
                 focusedRegion = .grid
-                windows11ShowPinnedOnly = false
-                windows7ShowPinnedOnly = false
             }
             onPresentationChange?(isPresented)
         }
@@ -54,24 +52,6 @@ final class StartMenuState {
     /// since these rows don't drive an animated scale/shadow off this same
     /// state, just a static background tint.
     var hoveredRowID: String?
-
-    /// The Windows 11 layout's "Épinglé" toggle (see
-    /// `Windows11StartMenuView`) — irrelevant to the Kickoff layout, kept
-    /// here rather than view-local `@State` for the same reason every
-    /// other piece of menu state is (see this type's own doc comment).
-    /// Defaults off: the layout shows every app by default, not just the
-    /// Dock's pinned ones.
-    var windows11ShowPinnedOnly = false {
-        didSet { selectedIndex = 0 }
-    }
-
-    /// The Windows 7 layout's "Épinglé" toggle (see
-    /// `Windows7StartMenuView`) — defaults off: the list shows every
-    /// installed app, most-recently-launched first, rather than just the
-    /// Dock's pinned ones.
-    var windows7ShowPinnedOnly = false {
-        didSet { selectedIndex = 0 }
-    }
 
     /// What both the start button's tap and the global keyboard shortcut
     /// actually call, instead of toggling `isPresented` directly —

@@ -319,9 +319,49 @@ final class ThemeStore {
     }
 
     /// What the start menu should actually render at: the user's manual
-    /// resize if there is one, else the dynamic default.
+    /// resize if there is one, else the dynamic default. Clamped against
+    /// `effectiveStartMenuMinSize` so a size saved under one start menu
+    /// style (or before that style's own minimum was tightened) can't
+    /// leave a *different* style's fixed-column grid squeezed smaller than
+    /// its content needs after switching styles.
     var effectiveStartMenuSize: CGSize {
-        startMenuSizeOverride ?? dynamicStartMenuSize
+        let size = startMenuSizeOverride ?? dynamicStartMenuSize
+        let minSize = effectiveStartMenuMinSize
+        return CGSize(width: max(size.width, minSize.width), height: max(size.height, minSize.height))
+    }
+
+    /// `startMenuMinSize` alone let the corner handle drag every layout
+    /// down to the same flat 320×260 floor, but Kickoff's fixed-width
+    /// category sidebar and Windows 11's fixed six-column grid (kept fixed,
+    /// not `.adaptive`, so arrow-key jumps stay predictable — see
+    /// `StartMenuView`/`Windows11StartMenuView`) both have a real minimum
+    /// width their *content* needs regardless of the window's own size: a
+    /// fixed column count can't reflow to fewer columns the way an
+    /// adaptive grid would, so squeezing the window past that point just
+    /// spills icons/text past the grid's own bounds instead of resizing
+    /// them. Windows 7's plain list has no such fixed-column-count
+    /// requirement, so it keeps the plain floor.
+    var effectiveStartMenuMinSize: CGSize {
+        let floor = Self.startMenuMinSize
+        switch startMenuStyle {
+        case .windows11:
+            // Matches `Windows11StartMenuView.iconSize`/`appCell`'s own math:
+            // each cell needs at least `iconSize + 20` (its label's fixed
+            // frame width, wider than the icon itself) across its fixed
+            // 6-column grid, plus that grid's own inter-column spacing (12)
+            // and the surrounding 20pt padding on both sides.
+            let iconSize = max(12, effectivePanelHeight * taskbarIconRatio) * 2
+            let columns: CGFloat = 6
+            let width = columns * (iconSize + 20) + (columns - 1) * 12 + 40
+            return CGSize(width: max(floor.width, width), height: floor.height)
+        case .kickoff, .realSpotlight:
+            // Matches `StartMenuView`'s own fixed 180pt category sidebar
+            // plus its 3-column grid (60pt minimum per column) and padding.
+            let width: CGFloat = 180 + 3 * 60 + 2 * 8 + 2 * 10 + 4
+            return CGSize(width: max(floor.width, width), height: floor.height)
+        case .windows7:
+            return floor
+        }
     }
 
     private static let autoHideEnabledKey = "TB.panel.autoHideEnabled"

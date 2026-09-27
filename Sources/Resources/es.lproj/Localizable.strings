@@ -17,8 +17,8 @@
 "icon_edit.restore_original" = "Restaurar icono original";
 "icon_edit.change" = "Cambiar icono";
 "menu.open_apps" = "Aplicaciones abiertas";
-"menu.liquid_glass" = "Fondo de vidrio líquido";
-"menu.liquid_glass_intensity" = "Intensidad del vidrio líquido";
+"menu.liquid_glass" = "Fondo transparente";
+"menu.liquid_glass_intensity" = "Intensidad de la transparencia";
 "menu.auto_hide" = "Ocultar la barra de tareas automáticamente";
 "menu.language" = "Idioma";
 "menu.quit" = "Salir de la barra de tareas";
@@ -50,10 +50,6 @@
 "settings.start_menu_style.windows11" = "Windows 11";
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
-"start.pinned" = "Anclado";
-"start.all_apps" = "Todas las aplicaciones";
-"start.all_programs" = "Todos los programas";
-"start.search_results" = "Resultados de la búsqueda";
 "start.documents" = "Documentos";
 "start.pictures" = "Imágenes";
 "start.music" = "Música";

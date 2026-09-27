@@ -17,8 +17,8 @@
 "icon_edit.restore_original" = "Rétablir l'icône d'origine";
 "icon_edit.change" = "Changer l'icône";
 "menu.open_apps" = "Applications ouvertes";
-"menu.liquid_glass" = "Fond en verre liquide";
-"menu.liquid_glass_intensity" = "Intensité du verre liquide";
+"menu.liquid_glass" = "Fond transparent";
+"menu.liquid_glass_intensity" = "Intensité de la transparence";
 "menu.auto_hide" = "Masquer la taskbar automatiquement";
 "menu.language" = "Langue";
 "menu.quit" = "Quitter la barre des tâches";
@@ -50,10 +50,6 @@
 "settings.start_menu_style.windows11" = "Windows 11";
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.spotlight" = "Spotlight";
-"start.pinned" = "Épinglé";
-"start.all_apps" = "Toutes les applications";
-"start.all_programs" = "Tous les programmes";
-"start.search_results" = "Résultats de la recherche";
 "start.documents" = "Documents";
 "start.pictures" = "Images";
 "start.music" = "Musique";

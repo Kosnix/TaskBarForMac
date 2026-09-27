@@ -6,18 +6,26 @@ import SwiftUI
 /// a "Liquid Glass"-style translucent look.
 ///
 /// The Liquid Glass option originally wrapped the real system material,
-/// `NSGlassEffectView` (macOS 26+). Three rounds of trying to fix it now —
+/// `NSGlassEffectView` (macOS 26+). Three rounds of trying to fix it —
 /// forcing `TaskbarPanel`/`StartMenuPanel.isKeyWindow`, pinning
 /// `NSAppearance`, retrying on macOS 27 — didn't stop it from washing out
 /// pale/blank on focus loss, confirmed again once the start menu (a much
 /// bigger surface than the thin taskbar, where it was probably happening
-/// unnoticed) rendered solid white instead of translucent. This matches
-/// the same still-open Apple regression already documented before: it
-/// renders from a *cached* snapshot of what's behind the window that only
-/// refreshes when the window itself moves — exactly the situation for a
-/// borderless, non-activating, `.canJoinAllSpaces` panel like this app's.
-/// Not something more tuning here can fix — back to the
-/// `NSVisualEffectView`-based simulation for good.
+/// unnoticed) rendered solid white instead of translucent. Research into
+/// public reports confirms this isn't something more client-side tuning can
+/// fix: Apple's own developer forums have multiple *unresolved* threads
+/// describing the exact same window shape as this app's (borderless,
+/// non-activating, `.canJoinAllSpaces`, moved only programmatically) —
+/// `NSGlassEffectView` renders from a snapshot that's only invalidated when
+/// the window itself moves (not when whatever's behind it changes), and
+/// separately, a non-key panel is stuck showing the material's "inactive"
+/// look with no documented workaround. A second real shipping app hit the
+/// identical wall and disabled `NSGlassEffectView` for SwiftUI content on
+/// macOS 26+ entirely, and had to special-case macOS 27 again after a tint
+/// compositing change made a themed tint render fully opaque instead of
+/// translucent there. So this stays on the `NSVisualEffectView`-based
+/// simulation for good — the effort instead goes into making *that* read
+/// as close to the real material as possible (see `content` below).
 struct PanelBackground: View {
     let tokens: ThemeTokens
     let liquidGlassEnabled: Bool
@@ -40,12 +48,13 @@ struct PanelBackground: View {
     }
 
     /// The theme color, tinted to `liquidGlassIntensity`'s own alpha — a
-    /// clear tint reads as pure, untinted glass; a fully opaque one reads
-    /// as a near-solid, theme-colored panel. Shared by both the real
-    /// `NSGlassEffectView` (whose own `tintColor` takes this directly) and
-    /// the simulated fallback (layered as a plain SwiftUI `Color` on top).
+    /// clear tint reads as pure, untinted glass; a heavily tinted one reads
+    /// as a strongly-colored glass. Capped at 0.85 (not 1) so the blur
+    /// layered underneath is never fully hidden — even at the slider's
+    /// maximum, this should still read as tinted *glass*, not a flat,
+    /// solid-color panel.
     private var glassTintColor: Color {
-        Color(hex: tokens.panel.backgroundColor).opacity(liquidGlassIntensity)
+        Color(hex: tokens.panel.backgroundColor).opacity(liquidGlassIntensity * 0.85)
     }
 
     @ViewBuilder
@@ -56,16 +65,28 @@ struct PanelBackground: View {
             // light theme-colored tint on top keeps it reading as "this
             // theme's glass", not just a generic blur.
             //
-            // The tint's own opacity was the only thing the slider moved —
-            // since a fully-opaque tint already hides the blur underneath
-            // regardless, the two ends of the range looked right, but
-            // everything *between* them barely felt different. Fading the
-            // blur's own opacity down as the tint rises makes the whole
-            // slider track produce a visibly different look end to end,
-            // not just at its extremes.
+            // The blur used to fade out as the tint rose (opacity
+            // `1 - intensity * 0.85`), so the low end of the slider read as
+            // pure blur with barely any tint, and the high end read as a
+            // flat opaque color with the blur almost gone — blur and
+            // transparency were never really visible *together*. The blur
+            // now stays at full strength across the whole range; only the
+            // tint's own opacity tracks the slider, and even at its most
+            // intense it's capped short of fully opaque, so the blur is
+            // always still showing through underneath.
             ZStack {
-                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                    .opacity(1 - liquidGlassIntensity * 0.85)
+                // `.popover` turned out to be the wrong pick: on macOS 27,
+                // Apple quietly rebuilt several materials (confirmed for
+                // `.selection`, and `.popover` was never confirmed to have
+                // survived either) to drop their `CABackdropLayer` — the
+                // actual live-blur layer — entirely, so there was nothing
+                // left to blend regardless of blending mode. `.sidebar`
+                // (like `.underWindowBackground`/`.hudWindow`) is confirmed
+                // to still carry that layer on macOS 27 and to honor the
+                // system's own Liquid Glass transparency slider, while
+                // reading much lighter than `.hudWindow`'s deliberately
+                // dark HUD tone.
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                 glassTintColor
             }
             .opacity(tokens.panel.backgroundOpacity)
@@ -100,10 +121,13 @@ struct GlassButtonBackground: View {
 
     var body: some View {
         if liquidGlassEnabled {
-            let tint = Color(hex: tokens.colors.buttonBackground).opacity(liquidGlassIntensity)
+            // Same reasoning as `PanelBackground.glassTintColor` — blur
+            // stays constant, only the tint's opacity (capped short of
+            // fully opaque) tracks the slider.
+            let tint = Color(hex: tokens.colors.buttonBackground).opacity(liquidGlassIntensity * 0.85)
             ZStack {
-                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                    .opacity(1 - liquidGlassIntensity * 0.85)
+                // Same material as `PanelBackground` — see its doc comment.
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                 tint
             }
         } else {

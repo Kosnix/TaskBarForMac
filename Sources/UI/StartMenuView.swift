@@ -324,12 +324,17 @@ struct StartMenuView: View {
         }
     }
 
+    /// Most-recently-launched-through-this-app first (see
+    /// `LaunchHistoryStore.sortedByRecency`) — same ordering every other
+    /// start menu style uses now, instead of `AppDiscovery`'s plain
+    /// alphabetical one.
     private var filteredApps: [InstalledApp] {
-        appDiscovery.apps.filter { app in
+        let matching = appDiscovery.apps.filter { app in
             let matchesCategory = state.selectedCategory == nil || app.category == state.selectedCategory
             let matchesQuery = state.query.isEmpty || app.displayName.localizedCaseInsensitiveContains(state.query)
             return matchesCategory && matchesQuery
         }
+        return LaunchHistoryStore.sortedByRecency(matching, bundleIdentifier: \.bundleIdentifier)
     }
 
     private func launch(_ app: InstalledApp) {

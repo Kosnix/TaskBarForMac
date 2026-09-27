@@ -22,70 +22,17 @@ struct Windows7StartMenuView: View {
     private static let rightColumnWidth: CGFloat = 220
     private static let topCornerRadius: CGFloat = 10
 
-    /// Unifies `PinnedApp` (the default pinned list) and `InstalledApp`
-    /// ("All Programs"/search results) so one row renderer handles either —
-    /// same reasoning as `Windows11StartMenuView.DisplayApp`.
-    private enum DisplayApp: Identifiable {
-        case pinned(PinnedApp)
-        case installed(InstalledApp)
-
-        var id: String {
-            switch self {
-            case .pinned(let app): "p-\(app.id)"
-            case .installed(let app): "i-\(app.id)"
-            }
-        }
-        var displayName: String {
-            switch self {
-            case .pinned(let app): app.displayName
-            case .installed(let app): app.displayName
-            }
-        }
-        var icon: NSImage {
-            switch self {
-            case .pinned(let app): app.icon
-            case .installed(let app): app.icon
-            }
-        }
-        var bundleIdentifier: String? {
-            switch self {
-            case .pinned(let app): app.bundleIdentifier
-            case .installed(let app): app.bundleIdentifier
-            }
-        }
-        var url: URL {
-            switch self {
-            case .pinned(let app): app.url
-            case .installed(let app): app.url
-            }
-        }
-    }
-
-    private var displayedApps: [DisplayApp] {
+    /// Every installed app — search results when there's a query, otherwise
+    /// every app, most-recently-launched-through-this-app first (see
+    /// `LaunchHistoryStore.sortedByRecency`). No more "Pinned"/"All
+    /// Programs" toggle: the taskbar itself already shows pinned apps, so a
+    /// second, separate pinned view here was pure redundancy.
+    private var displayedApps: [InstalledApp] {
         if !state.query.isEmpty {
             return appDiscovery.apps
                 .filter { $0.displayName.localizedCaseInsensitiveContains(state.query) }
-                .map(DisplayApp.installed)
         }
-        if state.windows7ShowPinnedOnly {
-            return windowManager.pinnedApps.map(DisplayApp.pinned)
-        }
-        // Every installed app, most-recently-launched-through-this-app
-        // first — apps never launched this way keep `AppDiscovery`'s own
-        // alphabetical order, after all the ones that do have a
-        // timestamp.
-        return appDiscovery.apps
-            .map { (app: $0, timestamp: LaunchHistoryStore.lastLaunchTimestamp(bundleIdentifier: $0.bundleIdentifier)) }
-            .enumerated()
-            .sorted { lhs, rhs in
-                switch (lhs.element.timestamp, rhs.element.timestamp) {
-                case (let l?, let r?): return l > r
-                case (nil, nil): return lhs.offset < rhs.offset
-                case (.some, nil): return true
-                case (nil, .some): return false
-                }
-            }
-            .map { DisplayApp.installed($0.element.app) }
+        return LaunchHistoryStore.sortedByRecency(appDiscovery.apps, bundleIdentifier: \.bundleIdentifier)
     }
 
     var body: some View {
@@ -122,9 +69,6 @@ struct Windows7StartMenuView: View {
 
     private var leftColumn: some View {
         VStack(spacing: 0) {
-            if state.query.isEmpty {
-                headerRow
-            }
             ScrollViewReader { proxy in
                 ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id)) {
                     LazyVStack(spacing: 1) {
@@ -148,25 +92,7 @@ struct Windows7StartMenuView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var headerRow: some View {
-        HStack {
-            Text(state.windows7ShowPinnedOnly ? L("start.pinned") : L("start.all_programs"))
-                .font(.system(size: tokens.typography.fontSize, weight: .semibold))
-            Spacer()
-            Button {
-                state.windows7ShowPinnedOnly.toggle()
-            } label: {
-                Text(state.windows7ShowPinnedOnly ? L("start.all_apps") : L("start.pinned"))
-                    .font(.system(size: tokens.typography.fontSize - 1))
-                    .foregroundStyle(Color(hex: tokens.colors.accent))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-    }
-
-    private func programRow(_ app: DisplayApp, isSelected: Bool) -> some View {
+    private func programRow(_ app: InstalledApp, isSelected: Bool) -> some View {
         let isHovered = state.hoveredRowID == app.id
         return Button {
             state.selectedIndex = displayedApps.firstIndex(where: { $0.id == app.id }) ?? state.selectedIndex
@@ -200,22 +126,6 @@ struct Windows7StartMenuView: View {
         }
         .buttonStyle(.plain)
         .clipShape(RoundedRectangle(cornerRadius: 4))
-        .overlay(alignment: .top) {
-            if isSelected || isHovered {
-                RoundedRectangle(cornerRadius: 4)
-                    // `accentText` (not a hardcoded white) — the token
-                    // every theme already defines as "a light color that
-                    // reads on top of `accent`", exactly what a gloss
-                    // highlight sitting over the accent-tinted selection
-                    // needs, so this follows whatever the active theme's
-                    // own contrast color actually is instead of assuming
-                    // every theme wants a plain white sheen.
-                    .fill(LinearGradient(colors: [Color(hex: tokens.colors.accentText).opacity(isSelected ? 0.4 : 0.22), .clear], startPoint: .top, endPoint: .bottom))
-                    .frame(height: 8)
-                    .padding(.horizontal, 1)
-                    .allowsHitTesting(false)
-            }
-        }
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(Color(hex: tokens.colors.accent).opacity(isSelected ? 0.9 : (isHovered ? 0.5 : 0)), lineWidth: 1)
@@ -232,13 +142,9 @@ struct Windows7StartMenuView: View {
         }
     }
 
-    private func launch(_ app: DisplayApp) {
-        switch app {
-        case .pinned(let pinned): windowManager.launch(pinned)
-        case .installed(let installed):
-            LaunchHistoryStore.recordLaunch(bundleIdentifier: installed.bundleIdentifier)
-            NSWorkspace.shared.openApplication(at: installed.url, configuration: NSWorkspace.OpenConfiguration())
-        }
+    private func launch(_ app: InstalledApp) {
+        LaunchHistoryStore.recordLaunch(bundleIdentifier: app.bundleIdentifier)
+        NSWorkspace.shared.openApplication(at: app.url, configuration: NSWorkspace.OpenConfiguration())
         onLaunch()
     }
 
@@ -413,15 +319,6 @@ struct Windows7StartMenuView: View {
                 endPoint: .bottom
             )
         )
-        .overlay(alignment: .top) {
-            // Same `accentText`-based gloss as the row highlight above,
-            // instead of a hardcoded white — see that one's doc comment.
-            RoundedRectangle(cornerRadius: 4)
-                .fill(LinearGradient(colors: [Color(hex: tokens.colors.accentText).opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
-                .frame(height: 12)
-                .padding(.horizontal, 1)
-                .allowsHitTesting(false)
-        }
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.black.opacity(0.2), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
