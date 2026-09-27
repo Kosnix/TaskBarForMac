@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -60,6 +61,33 @@ private func pinDroppedApplications(_ providers: [NSItemProvider], windowManager
     return true
 }
 
+/// Resolves each provider's file URL and moves it to the Trash — the real
+/// Dock's own trash-icon behavior, which this button's icon otherwise just
+/// implies without actually doing.
+@discardableResult
+private func trashDroppedFiles(_ providers: [NSItemProvider]) -> Bool {
+    guard !providers.isEmpty else { return false }
+    for provider in providers {
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
+            DispatchQueue.main.async {
+                // `NSWorkspace.recycle`, not `FileManager.trashItem` — same
+                // reasoning as `AppDiscovery.uninstall`'s own doc comment:
+                // it goes through the Finder/Workspace services, so it can
+                // prompt for authentication when the dropped file actually
+                // needs it, instead of just failing outright.
+                NSWorkspace.shared.recycle([url])
+                // The exact sound the real Dock's own trash icon plays for
+                // this same drag-and-drop gesture, not a generic system
+                // sound — it ships as a plain AIFF at a fixed path, so
+                // there's no need to reproduce it, just play it.
+                NSSound(contentsOfFile: "/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/dock/drag to trash.aif", byReference: true)?.play()
+            }
+        }
+    }
+    return true
+}
+
 extension View {
     /// Dock-style "spring loading" + drop-to-pin for file drags from other
     /// apps — see `SpringLoadDropDelegate`. `bundleIdentifier` is unused
@@ -75,6 +103,14 @@ extension View {
     func pinsDroppedApplications(windowManager: WindowManager) -> some View {
         onDrop(of: [.fileURL], isTargeted: nil) { providers in
             pinDroppedApplications(providers, windowManager: windowManager)
+        }
+    }
+
+    /// Dropping any file directly onto the trash button moves it to the
+    /// Trash, the same as dropping it on the real Dock's trash icon would.
+    func trashesDroppedFiles() -> some View {
+        onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            trashDroppedFiles(providers)
         }
     }
 }

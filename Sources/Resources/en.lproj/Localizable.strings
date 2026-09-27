@@ -86,6 +86,9 @@
 "alert.trash_app.title" = "Delete \"{name}\"?";
 "alert.trash_app.message" = "The app will be moved to the Trash.";
 "alert.uninstall_failed.title" = "Couldn't delete \"{name}\"";
+"menu.empty_trash" = "Empty Trash";
+"alert.empty_trash.title" = "Empty the Trash?";
+"alert.empty_trash.message" = "Items in the Trash will be permanently deleted.";
 "alert.uninstall_failed.message" = "This app may be protected by the system.\n{error}";
 
 

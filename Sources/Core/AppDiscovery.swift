@@ -85,19 +85,54 @@ final class AppDiscovery {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
+    /// The confirmation step every start menu style's own "Déplacer à la
+    /// corbeille" context menu item goes through first — same
+    /// warning-alert pattern as any other destructive action in this app
+    /// (e.g. shutdown's own native confirmation). Shared here instead of
+    /// copied into each of the three start menu views.
+    func confirmAndUninstall(_ app: InstalledApp) {
+        let alert = NSAlert()
+        alert.messageText = L("alert.trash_app.title", ["name": app.displayName])
+        alert.informativeText = L("alert.trash_app.message")
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L("app.trash"))
+        alert.addButton(withTitle: L("button.cancel"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            uninstall(app)
+        }
+    }
+
     /// Moves an app to the Trash (reversible, like Launchpad's own "Delete
     /// App"), used by the start menu's right-click "Déplacer à la corbeille".
-    /// Fails gracefully for SIP-protected system apps.
+    ///
+    /// Goes through `NSWorkspace.recycle`, not `FileManager.trashItem` —
+    /// this app has no special entitlement of its own, so trashing
+    /// anything our own process doesn't already own outright (most
+    /// installed apps, in practice) failed with a plain permission error
+    /// instead of ever offering to authenticate. `NSWorkspace.recycle`
+    /// delegates the actual move to the Finder/Workspace services, the
+    /// same path a real Finder drag-to-Trash goes through — including its
+    /// own admin-password prompt when the app genuinely needs one, which a
+    /// raw `FileManager` call has no way to trigger on our behalf.
     func uninstall(_ app: InstalledApp) {
-        do {
-            try FileManager.default.trashItem(at: app.url, resultingItemURL: nil)
-            apps.removeAll { $0.id == app.id }
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = L("alert.uninstall_failed.title", ["name": app.displayName])
-            alert.informativeText = L("alert.uninstall_failed.message", ["error": error.localizedDescription])
-            alert.alertStyle = .warning
-            alert.runModal()
+        NSWorkspace.shared.recycle([app.url]) { [weak self] _, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard let error else {
+                    self.apps.removeAll { $0.id == app.id }
+                    // The Finder's own "move to trash" sound — a different
+                    // fixed AIFF from the Dock's drag-and-drop one (see
+                    // `TaskDragItem.trashDroppedFiles`), matching that this
+                    // action came from a menu, not a drag.
+                    NSSound(contentsOfFile: "/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/finder/move to trash.aif", byReference: true)?.play()
+                    return
+                }
+                let alert = NSAlert()
+                alert.messageText = L("alert.uninstall_failed.title", ["name": app.displayName])
+                alert.informativeText = L("alert.uninstall_failed.message", ["error": error.localizedDescription])
+                alert.alertStyle = .warning
+                alert.runModal()
+            }
         }
     }
 

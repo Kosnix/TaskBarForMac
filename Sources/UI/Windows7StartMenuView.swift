@@ -139,6 +139,10 @@ struct Windows7StartMenuView: View {
                     ? windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
                     : windowManager.pin(url: app.url, displayName: app.displayName)
             }
+            Divider()
+            Button(L("app.trash")) {
+                appDiscovery.confirmAndUninstall(app)
+            }
         }
     }
 

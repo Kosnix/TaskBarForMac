@@ -29,6 +29,11 @@ private final class PressAndHoldView: NSView {
     var onTap: (() -> Void)?
     var onLongPress: (() -> Void)?
     var onHoverChange: ((Bool) -> Void)?
+    /// Set for a not-yet-running pinned launcher, which has nothing at all
+    /// to show on right-click outside edit mode (see `hitTest`'s doc
+    /// comment for why that needs handling here, not just by leaving its
+    /// own `.contextMenu` unattached).
+    var blocksContextMenuWhenNotEditing = false
 
     private var trackingArea: NSTrackingArea?
 
@@ -66,14 +71,34 @@ private final class PressAndHoldView: NSView {
     /// straight through to whatever SwiftUI content this overlay sits on
     /// top of, so `.contextMenu` there keeps responding to right-clicks
     /// exactly as if this view weren't here at all.
+    ///
+    /// `LauncherButtonView` (a pinned app that isn't running) only attaches
+    /// its own `.contextMenu` while editing — deliberately, since it has
+    /// nothing to offer otherwise (see its own doc comment) — but a
+    /// right-click this view lets pass through still doesn't just vanish:
+    /// with no SwiftUI content underneath claiming it, AppKit hands it to
+    /// whatever's *behind* this whole panel's content next, which turned
+    /// out to be `TaskbarContainerView`'s own right-click handler — showing
+    /// the bar's personalization menu over a closed app icon instead of no
+    /// menu at all. `blocksContextMenuWhenNotEditing` claims the right-click
+    /// itself in exactly that situation (see `rightMouseDown`, which then
+    /// does nothing with it) so it stops there instead of falling through.
     override func hitTest(_ point: NSPoint) -> NSView? {
         switch NSApp.currentEvent?.type {
         case .leftMouseDown, .leftMouseDragged, .leftMouseUp:
+            return super.hitTest(point)
+        case .rightMouseDown where blocksContextMenuWhenNotEditing && windowManager?.isEditingIcons != true:
             return super.hitTest(point)
         default:
             return nil
         }
     }
+
+    /// Only ever reached when `hitTest` just claimed a right-click for the
+    /// "nothing to show" case above — intentionally empty, not forwarded to
+    /// `super`, so the click simply stops here instead of reaching
+    /// anything else (a menu, or the bar's own right-click handler) at all.
+    override func rightMouseDown(with event: NSEvent) {}
 
     /// Hover state comes from here — a plain `NSTrackingArea`, not
     /// SwiftUI's own `.onHover` — because `.onHover` attached in the same
@@ -211,6 +236,7 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
     let onTap: () -> Void
     let onLongPress: () -> Void
     let onHoverChange: (Bool) -> Void
+    var blocksContextMenuWhenNotEditing = false
 
     func makeNSView(context: Context) -> PressAndHoldView {
         let view = PressAndHoldView()
@@ -219,6 +245,7 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
         view.onTap = onTap
         view.onLongPress = onLongPress
         view.onHoverChange = onHoverChange
+        view.blocksContextMenuWhenNotEditing = blocksContextMenuWhenNotEditing
         return view
     }
 
@@ -228,6 +255,7 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
         nsView.onTap = onTap
         nsView.onLongPress = onLongPress
         nsView.onHoverChange = onHoverChange
+        nsView.blocksContextMenuWhenNotEditing = blocksContextMenuWhenNotEditing
     }
 }
 
@@ -241,7 +269,7 @@ extension View {
     /// icon's own frame into `WindowManager.iconFrames` (see
     /// `reportsIconFrame`), so every other icon's own drag can find it as a
     /// possible target.
-    func iconPressAndHold(windowManager: WindowManager, bundleIdentifier: String?, onTap: @escaping () -> Void, onHoverChange: @escaping (Bool) -> Void = { _ in }) -> some View {
+    func iconPressAndHold(windowManager: WindowManager, bundleIdentifier: String?, onTap: @escaping () -> Void, blocksContextMenuWhenNotEditing: Bool = false, onHoverChange: @escaping (Bool) -> Void = { _ in }) -> some View {
         self
             .reportsIconFrame(bundleIdentifier: bundleIdentifier, windowManager: windowManager)
             .overlay(
@@ -255,7 +283,8 @@ extension View {
                     onLongPress: {
                         windowManager.isEditingIcons = true
                     },
-                    onHoverChange: onHoverChange
+                    onHoverChange: onHoverChange,
+                    blocksContextMenuWhenNotEditing: blocksContextMenuWhenNotEditing
                 )
             )
     }

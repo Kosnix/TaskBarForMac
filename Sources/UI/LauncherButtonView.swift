@@ -67,7 +67,7 @@ struct LauncherButtonView: View {
         // Last: needs to sit on top of `.taskReorderable`'s own `.onDrop`
         // target to actually receive left-clicks — see
         // `IconPressGesture.swift`'s doc comment.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch) { isHovering in
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch, blocksContextMenuWhenNotEditing: true) { isHovering in
             windowManager.hoveredWindowID = isHovering ? "launcher-\(app.id)" : (windowManager.hoveredWindowID == "launcher-\(app.id)" ? nil : windowManager.hoveredWindowID)
         }
     }

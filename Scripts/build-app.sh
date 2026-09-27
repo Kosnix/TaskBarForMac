@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Swift package and assembles it into a real TaskbarReplacement.app
+# Builds the Swift package and assembles it into a real TaskBarForMac.app
 # bundle (Info.plist, bundled themes, code signature), since `swift build`
 # alone only produces a bare executable.
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-IDENTITY="TaskbarReplacement Local Dev"
+IDENTITY="TaskBarForMac Local Dev"
 DO_INSTALL=false
 CONFIGURATION="release"
 
@@ -35,7 +35,7 @@ done
 echo "==> swift build -c $CONFIGURATION"
 swift build -c "$CONFIGURATION"
 
-APP_NAME="TaskbarReplacement.app"
+APP_NAME="TaskBarForMac.app"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME"
 
@@ -43,7 +43,7 @@ echo "==> Assemblage de $APP_NAME"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
-cp "$ROOT_DIR/.build/$CONFIGURATION/TaskbarReplacement" "$APP_DIR/Contents/MacOS/TaskbarReplacement"
+cp "$ROOT_DIR/.build/$CONFIGURATION/TaskBarForMac" "$APP_DIR/Contents/MacOS/TaskBarForMac"
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"

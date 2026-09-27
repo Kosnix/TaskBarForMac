@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>TaskbarReplacement</string>
+    <string>TaskBarForMac</string>
     <key>CFBundleDisplayName</key>
-    <string>Taskbar</string>
+    <string>TaskBarForMac</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.nikos.taskbarreplacement</string>
+    <string>dev.nikos.taskbarformac</string>
     <key>CFBundleVersion</key>
     <string>1.1.5</string>
     <key>CFBundleShortVersionString</key>
     <string>1.1.5</string>
     <key>CFBundleExecutable</key>
-    <string>TaskbarReplacement</string>
+    <string>TaskBarForMac</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

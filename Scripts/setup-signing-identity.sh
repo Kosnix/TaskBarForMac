@@ -6,7 +6,7 @@
 # identity keeps the grant across rebuilds.
 set -euo pipefail
 
-IDENTITY_NAME="${1:-TaskbarReplacement Local Dev}"
+IDENTITY_NAME="${1:-TaskBarForMac Local Dev}"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT

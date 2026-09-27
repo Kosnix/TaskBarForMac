@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Design/AppIcon.svg" width="128" height="128" alt="TaskbarReplacement icon">
+  <img src="Design/AppIcon.svg" width="128" height="128" alt="TaskBarForMac icon">
 </p>
 
-<h1 align="center">TaskbarReplacement</h1>
+<h1 align="center">TaskBarForMac</h1>
 
 <p align="center">
   A KDE Plasma-style taskbar that replaces the macOS Dock.
@@ -14,7 +14,7 @@
 
 ## Overview
 
-TaskbarReplacement replaces the macOS Dock with a real Windows/KDE-style taskbar: open-app icons, a start button with an application menu, a clock, pinning — all customizable through a folder-based JSON theming system, no code required.
+TaskBarForMac replaces the macOS Dock with a real Windows/KDE-style taskbar: open-app icons, a start button with an application menu, a clock, pinning — all customizable through a folder-based JSON theming system, no code required.
 
 Personal project, not affiliated with KDE or Microsoft — just inspired by their look.
 
@@ -54,8 +54,8 @@ Every setting is available by right-clicking the bar → **Settings…**.
 
 ## Installation
 
-1. Download `TaskbarReplacement-Installer.dmg` from the [latest release](../../releases/latest).
-2. Open the DMG and drag `TaskbarReplacement.app` into the **Applications** folder.
+1. Download `TaskBarForMac-Installer.dmg` from the [latest release](../../releases/latest).
+2. Open the DMG and drag `TaskBarForMac.app` into the **Applications** folder.
 3. On first launch, macOS will block it (the app isn't notarized by Apple — this is a personal, self-signed project): **right-click the app → Open → Open** in the dialog. Only needed once.
 4. Grant **Accessibility** access when macOS asks (needed to manage other apps' windows).
 
@@ -64,8 +64,8 @@ Every setting is available by right-clicking the bar → **Settings…**.
 Only needs the Command Line Tools (no full Xcode required) and macOS 14+.
 
 ```bash
-git clone https://github.com/Kosnix/TaskbarReplacement.git
-cd TaskbarReplacement
+git clone https://github.com/Kosnix/TaskBarForMac.git
+cd TaskBarForMac
 swift build
 ```
 

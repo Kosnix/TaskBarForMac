@@ -471,6 +471,12 @@ struct TaskbarView: View {
         }
         .buttonStyle(.plain)
         .help(L("help.trash"))
+        .trashesDroppedFiles()
+        .contextMenu {
+            Button(L("menu.empty_trash")) {
+                TrashManager.emptyTrash()
+            }
+        }
     }
 
     private func clockView(tokens: ThemeTokens) -> some View {

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Design/AppIcon.svg" width="128" height="128" alt="Icône TaskbarReplacement">
+  <img src="Design/AppIcon.svg" width="128" height="128" alt="Icône TaskBarForMac">
 </p>
 
-<h1 align="center">TaskbarReplacement</h1>
+<h1 align="center">TaskBarForMac</h1>
 
 <p align="center">
   Une barre des tâches façon KDE Plasma qui remplace le Dock de macOS.
@@ -14,7 +14,7 @@
 
 ## Présentation
 
-TaskbarReplacement remplace le Dock macOS par une vraie barre des tâches à la Windows/KDE : icônes des applications ouvertes, bouton démarrer avec menu d'applications, horloge, épinglage — le tout personnalisable via un système de thèmes en dossiers JSON, sans toucher au code.
+TaskBarForMac remplace le Dock macOS par une vraie barre des tâches à la Windows/KDE : icônes des applications ouvertes, bouton démarrer avec menu d'applications, horloge, épinglage — le tout personnalisable via un système de thèmes en dossiers JSON, sans toucher au code.
 
 Projet personnel, pas affilié à KDE ni à Microsoft — juste inspiré de leur look.
 
@@ -54,8 +54,8 @@ Tous les réglages sont accessibles par clic droit sur la barre → **Paramètre
 
 ## Installation
 
-1. Télécharger `TaskbarReplacement-Installer.dmg` depuis la [dernière release](../../releases/latest).
-2. Ouvrir le DMG et glisser `TaskbarReplacement.app` dans le dossier **Applications**.
+1. Télécharger `TaskBarForMac-Installer.dmg` depuis la [dernière release](../../releases/latest).
+2. Ouvrir le DMG et glisser `TaskBarForMac.app` dans le dossier **Applications**.
 3. Au premier lancement, macOS bloquera l'ouverture (l'app n'est pas notariée par Apple — c'est un projet personnel, auto-signé) : faire **clic droit sur l'app → Ouvrir → Ouvrir** dans la boîte de dialogue. Cette étape n'est nécessaire qu'une seule fois.
 4. Autoriser l'accès à l'**Accessibilité** quand macOS le demande (nécessaire pour gérer les fenêtres des autres applications).
 
@@ -64,8 +64,8 @@ Tous les réglages sont accessibles par clic droit sur la barre → **Paramètre
 Nécessite uniquement les Command Line Tools (pas besoin d'Xcode complet) et macOS 14+.
 
 ```bash
-git clone https://github.com/Kosnix/TaskbarReplacement.git
-cd TaskbarReplacement
+git clone https://github.com/Kosnix/TaskBarForMac.git
+cd TaskBarForMac
 swift build
 ```
 

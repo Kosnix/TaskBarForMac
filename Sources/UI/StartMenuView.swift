@@ -307,20 +307,8 @@ struct StartMenuView: View {
             }
             Divider()
             Button(L("app.trash")) {
-                confirmUninstall(app)
+                appDiscovery.confirmAndUninstall(app)
             }
-        }
-    }
-
-    private func confirmUninstall(_ app: InstalledApp) {
-        let alert = NSAlert()
-        alert.messageText = L("alert.trash_app.title", ["name": app.displayName])
-        alert.informativeText = L("alert.trash_app.message")
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: L("app.trash"))
-        alert.addButton(withTitle: L("button.cancel"))
-        if alert.runModal() == .alertFirstButtonReturn {
-            appDiscovery.uninstall(app)
         }
     }
 

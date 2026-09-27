@@ -20,7 +20,7 @@ enum ThemeLoader {
     /// User-installable themes live here, alongside the app's own support data.
     static var userThemesDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("TaskbarReplacement/Themes", isDirectory: true)
+        return appSupport.appendingPathComponent("TaskBarForMac/Themes", isDirectory: true)
     }
 
     /// Bundled themes: prefer the packaged .app's Contents/Resources/Themes, fall back to

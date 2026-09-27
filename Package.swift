@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "TaskbarReplacement",
+    name: "TaskBarForMac",
     defaultLocalization: "fr",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "TaskbarReplacement", targets: ["TaskbarReplacement"])
+        .executable(name: "TaskBarForMac", targets: ["TaskBarForMac"])
     ],
     targets: [
         .executableTarget(
-            name: "TaskbarReplacement",
+            name: "TaskBarForMac",
             path: "Sources",
             resources: [
                 .copy("Resources/Themes"),
