@@ -273,6 +273,17 @@ final class ThemeStore {
         }
     }
 
+    private static let taskbarIconHoverZoomRatioKey = "TB.taskbar.iconHoverZoomRatio"
+
+    /// How much a taskbar icon grows on hover, as a fraction of its own
+    /// size — same slider pattern and application point as
+    /// `taskbarIconRatio` just above.
+    var taskbarIconHoverZoomRatio: Double {
+        didSet {
+            UserDefaults.standard.set(taskbarIconHoverZoomRatio, forKey: Self.taskbarIconHoverZoomRatioKey)
+        }
+    }
+
     private static let startMenuWidthOverrideKey = "TB.startMenu.widthOverride"
     private static let startMenuHeightOverrideKey = "TB.startMenu.heightOverride"
 
@@ -425,6 +436,11 @@ final class ThemeStore {
             taskbarIconSpacingRatio = storedSpacingRatio
         } else {
             taskbarIconSpacingRatio = ThemeTokens.defaultTaskbarIconSpacingRatio
+        }
+        if let storedHoverZoomRatio = UserDefaults.standard.object(forKey: Self.taskbarIconHoverZoomRatioKey) as? Double {
+            taskbarIconHoverZoomRatio = storedHoverZoomRatio
+        } else {
+            taskbarIconHoverZoomRatio = ThemeTokens.defaultTaskbarIconHoverZoomRatio
         }
         languageOverride = Localization.languageOverride
         if let storedWidth = UserDefaults.standard.object(forKey: Self.startMenuWidthOverrideKey) as? Double,

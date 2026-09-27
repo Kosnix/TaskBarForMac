@@ -10,10 +10,12 @@
 "menu.bar_size" = "Taille de la barre";
 "settings.icon_size" = "Taille des icônes";
 "settings.icon_spacing" = "Espacement des icônes";
+"settings.icon_hover_zoom" = "Zoom au survol";
 "account.open_settings" = "Ouvrir les réglages du compte Apple";
 "icon_picker.title" = "Choisir une nouvelle icône";
 "icon_edit.done" = "Terminé";
 "icon_edit.restore_original" = "Rétablir l'icône d'origine";
+"icon_edit.change" = "Changer l'icône";
 "menu.open_apps" = "Applications ouvertes";
 "menu.liquid_glass" = "Fond en verre liquide";
 "menu.liquid_glass_intensity" = "Intensité du verre liquide";

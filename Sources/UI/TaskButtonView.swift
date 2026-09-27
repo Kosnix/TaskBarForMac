@@ -34,6 +34,7 @@ struct TaskButtonView: View {
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
                     .wiggle(isActive: windowManager.isEditingIcons, seed: window.id.hashValue)
+                    .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
             }
             if showLabel {
                 Text(window.title)
@@ -49,7 +50,6 @@ struct TaskButtonView: View {
         // with modest content otherwise leaves empty space before the icon
         // too, not just after it).
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
-        .background(backgroundColor)
         // Positioned by hand (not a plain `.overlay` on the icon) — the
         // icon sits inside an `HStack` whose default cross-axis alignment
         // is `.center`, so when the button is taller than the icon (icon
@@ -65,11 +65,11 @@ struct TaskButtonView: View {
                 .offset(x: tokens.effectiveTaskbarEdgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
         }
         .overlay(activeUnderline, alignment: .bottom)
-        .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
+        // No more `.clipShape` here — there's no background fill left to
+        // round the corners of (see `backgroundColor`'s removal above),
+        // and clipping to the button's own bounds was cutting off
+        // `.hoverLift`'s shadow, which needs to spill past the icon.
         .contentShape(Rectangle())
-        .onHover { isHovering in
-            windowManager.hoveredWindowID = isHovering ? window.id : (windowManager.hoveredWindowID == window.id ? nil : windowManager.hoveredWindowID)
-        }
         .contextMenu {
             // Not while editing icons — the same reason a left-click stops
             // minimizing/raising in this mode: jiggling is for
@@ -83,12 +83,29 @@ struct TaskButtonView: View {
                 }
                 Divider()
             }
-            Button(windowManager.isPinned(bundleIdentifier: window.bundleIdentifier) ? L("taskbar.unpin") : L("taskbar.pin")) {
-                windowManager.togglePin(pid: window.pid, bundleIdentifier: window.bundleIdentifier, displayName: window.appName)
+            // Unpinning specifically is edit-mode-only (detaching an icon
+            // is an edit, same as reordering/re-skinning one) — pinning a
+            // not-yet-pinned one isn't, since that's not removing anything
+            // from the bar.
+            if windowManager.isPinned(bundleIdentifier: window.bundleIdentifier) {
+                if windowManager.isEditingIcons {
+                    Button(L("taskbar.unpin")) {
+                        windowManager.togglePin(pid: window.pid, bundleIdentifier: window.bundleIdentifier, displayName: window.appName)
+                    }
+                }
+            } else {
+                Button(L("taskbar.pin")) {
+                    windowManager.togglePin(pid: window.pid, bundleIdentifier: window.bundleIdentifier, displayName: window.appName)
+                }
             }
-            if windowManager.isEditingIcons, windowManager.hasCustomIcon(bundleIdentifier: window.bundleIdentifier) {
-                Button(L("icon_edit.restore_original")) {
-                    windowManager.restoreOriginalIcon(for: window.bundleIdentifier)
+            if windowManager.isEditingIcons {
+                Button(L("icon_edit.change")) {
+                    windowManager.presentIconPicker(for: window.bundleIdentifier)
+                }
+                if windowManager.hasCustomIcon(bundleIdentifier: window.bundleIdentifier) {
+                    Button(L("icon_edit.restore_original")) {
+                        windowManager.restoreOriginalIcon(for: window.bundleIdentifier)
+                    }
                 }
             }
         }
@@ -101,27 +118,16 @@ struct TaskButtonView: View {
         // `.onDrop` target especially) to actually receive left-clicks —
         // see `IconPressGesture.swift`'s doc comment for why an earlier
         // ordering silently ate every click before it ever reached this.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: window.bundleIdentifier, onTap: onTap)
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: window.bundleIdentifier, onTap: onTap) { isHovering in
+            windowManager.hoveredWindowID = isHovering ? window.id : (windowManager.hoveredWindowID == window.id ? nil : windowManager.hoveredWindowID)
+        }
     }
 
     private var isHovered: Bool { windowManager.hoveredWindowID == window.id }
 
-    /// Breeze's kstyle hardcodes a flat 0.3 alpha for hover/highlight fills
-    /// (`Metrics::Blend_Value` in breezemetrics.h, applied via
-    /// `color.setAlphaF(Metrics::Blend_Value)` in breezestyle.cpp) — reused
-    /// verbatim here instead of an eyeballed opacity.
-    private static let breezeBlendValue: Double = 0.3
-
-    private var backgroundColor: Color {
-        let accent = Color(hex: tokens.colors.accent)
-        if isHovered {
-            return accent.opacity(Self.breezeBlendValue)
-        }
-        if !window.isMinimized {
-            return accent.opacity(Self.breezeBlendValue / 2)
-        }
-        return .clear
-    }
+    // Neither a running window nor hover get a flat background tint any
+    // more — an open app reads from `activeUnderline` alone, and hover
+    // reads from `.hoverLift`'s scale/shadow instead of a filled block.
 
     private static let minimizedDotSize: CGFloat = 4
     private static let minimizedDotBottomInset: CGFloat = 2

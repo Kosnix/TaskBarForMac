@@ -60,6 +60,7 @@ final class WindowManager {
     /// plain, macro-free SwiftUI views. See ShortcutsManager for why.
     var hoveredWindowID: String?
     var hoveredGroupID: String?
+
     /// Each grouped task button's own frame, in `TaskbarView`'s shared
     /// `"taskbarRoot"` coordinate space — kept live so the hover window-list
     /// popup (rendered at `TaskbarView`'s top level instead of as a
@@ -278,29 +279,38 @@ final class WindowManager {
     /// Drag-and-drop reordering of taskbar icons — a pure in-memory preview
     /// (`pendingIconOrder`) while `isEditingIcons` is on; nothing reaches
     /// the real Dock until edit mode actually ends (`commitPendingIconOrder`).
-    /// Moves `draggedBundleIdentifier` to sit at `droppedOnBundleIdentifier`'s
-    /// position among everything currently shown in the taskbar. Anything
-    /// touched by the drag that wasn't already pinned becomes pinned once
-    /// committed — only pinned apps have a persistent position, so that's
-    /// the only way a manual reorder can "stick".
-    func reorder(draggedBundleIdentifier: String, droppedOnBundleIdentifier: String) {
+    /// Moves `draggedBundleIdentifier` to sit just before or after
+    /// `droppedOnBundleIdentifier`, per `insertBefore` — decided by
+    /// `PressAndHoldView` from which side of the target the cursor is
+    /// physically on, not from comparing indices (see its own doc comment
+    /// for why that used to make an adjacent swap oscillate forever). Only
+    /// pinned apps have a persistent position, so anything touched by the
+    /// drag that wasn't already pinned becomes pinned once committed — that
+    /// is what makes a manual reorder "stick".
+    func reorder(draggedBundleIdentifier: String, droppedOnBundleIdentifier: String, insertBefore: Bool) {
         guard draggedBundleIdentifier != droppedOnBundleIdentifier else { return }
 
-        var order = currentEntryBundleIdentifiers()
+        let originalOrder = currentEntryBundleIdentifiers()
+        var order = originalOrder
         guard let fromIndex = order.firstIndex(of: draggedBundleIdentifier),
-              let originalTargetIndex = order.firstIndex(of: droppedOnBundleIdentifier) else { return }
-        // Dragging onto the item immediately to your right, then always
-        // inserting *before* the target, is a no-op for that one specific
-        // case — the dragged item was already sitting right before it.
-        // Whether the drag moved forward or backward decides which side of
-        // the (now-shifted) target to land on instead, so an adjacent swap
-        // actually swaps regardless of direction.
-        let movingForward = fromIndex < originalTargetIndex
+              order.contains(droppedOnBundleIdentifier) else { return }
 
         order.remove(at: fromIndex)
         guard let toIndex = order.firstIndex(of: droppedOnBundleIdentifier) else { return }
-        let insertionIndex = movingForward ? toIndex + 1 : toIndex
+        let insertionIndex = insertBefore ? toIndex : toIndex + 1
         order.insert(draggedBundleIdentifier, at: insertionIndex)
+
+        // `PressAndHoldView` calls this on every drag tick that lands over a
+        // (possibly repeated) target, not just once — bailing out here when
+        // nothing would actually change is what makes that safe, instead of
+        // needing the caller to guess in advance whether a given target is
+        // "new". That in turn is what makes reversing a drag work: passing
+        // over an icon, continuing past it, then coming straight back to
+        // the very same icon needs to trigger a *second*, different reorder
+        // against that identical target — something a plain "did the target
+        // change since last time" guard on the caller's side can't tell
+        // apart from hovering it without moving at all.
+        guard order != originalOrder else { return }
 
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             pendingIconOrder = order
@@ -350,7 +360,7 @@ final class WindowManager {
             } else if let running = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }),
                       let url = running.bundleURL {
                 let name = running.localizedName ?? url.deletingPathExtension().lastPathComponent
-                resolved.append(PinnedApp(url: url, displayName: name, bundleIdentifier: bundleIdentifier, rawEntry: nil))
+                resolved.append(PinnedApp(url: url, displayName: name, bundleIdentifier: bundleIdentifier, rawEntry: nil, icon: running.icon ?? NSWorkspace.shared.icon(forFile: url.path)))
             }
         }
         return resolved

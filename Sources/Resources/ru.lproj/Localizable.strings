@@ -10,10 +10,12 @@
 "menu.bar_size" = "Размер панели";
 "settings.icon_size" = "Размер значков";
 "settings.icon_spacing" = "Интервал между значками";
+"settings.icon_hover_zoom" = "Увеличение при наведении";
 "account.open_settings" = "Открыть настройки Apple ID";
 "icon_picker.title" = "Выбрать новый значок";
 "icon_edit.done" = "Готово";
 "icon_edit.restore_original" = "Восстановить исходный значок";
+"icon_edit.change" = "Изменить значок";
 "menu.open_apps" = "Открытые приложения";
 "menu.liquid_glass" = "Фон Liquid Glass";
 "menu.liquid_glass_intensity" = "Интенсивность Liquid Glass";

@@ -21,13 +21,16 @@ import SwiftUI
 /// Doing the drag-target detection here too (comparing the live drag point
 /// against `WindowManager.iconFrames`, simple geometric containment)
 /// sidesteps that entirely: one view owns the whole gesture, start to
-/// finish, same as `ResizeHandleView`/`ClickableMenuView`/`AutoFocusTextField`
+/// finish, same as `CornerResizeHandleView`/`ClickableMenuView`/`AutoFocusTextField`
 /// already do for their own reliability needs.
 private final class PressAndHoldView: NSView {
     weak var windowManager: WindowManager?
     var bundleIdentifier: String?
     var onTap: (() -> Void)?
     var onLongPress: (() -> Void)?
+    var onHoverChange: ((Bool) -> Void)?
+
+    private var trackingArea: NSTrackingArea?
 
     /// A `DispatchWorkItem` on the main queue, not an `NSTimer`/`RunLoop`
     /// timer — while a mouse button is held down, AppKit can service the
@@ -39,12 +42,25 @@ private final class PressAndHoldView: NSView {
     /// regardless.
     private var pendingLongPress: DispatchWorkItem?
     private var startLocation: NSPoint = .zero
-    private var lastReorderTarget: String?
     private var isDraggingToReorder = false
+    /// A frozen copy of `WindowManager.iconFrames`, taken once at
+    /// `mouseDown` — see `reorderIfNeeded`'s doc comment for why hit-testing
+    /// against a live, still-animating layout instead of this snapshot
+    /// caused a real duplication bug.
+    private var dragOriginalFrames: [String: CGRect] = [:]
 
     private static let minimumDuration: TimeInterval = 0.45
     private static let maximumDistance: CGFloat = 50
     private static let dragStartThreshold: CGFloat = 8
+
+    /// Without this, `NSView`'s default (`false`) means the very first
+    /// click on an icon while some other app is frontmost only brings this
+    /// panel's window forward — it doesn't actually reach `mouseDown` at
+    /// all, so the click seems to do nothing and a second click is needed
+    /// to really launch/activate anything. The real Dock (and every other
+    /// always-on-top utility bar) responds to the first click regardless
+    /// of focus; this makes ours do the same.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     /// Only actually claims left-button events — a right-click passes
     /// straight through to whatever SwiftUI content this overlay sits on
@@ -59,10 +75,37 @@ private final class PressAndHoldView: NSView {
         }
     }
 
+    /// Hover state comes from here — a plain `NSTrackingArea`, not
+    /// SwiftUI's own `.onHover` — because `.onHover` attached in the same
+    /// view subtree as `.hoverLift`'s animated scale/shadow turned out to
+    /// flicker: the hover-driven re-render appears to tear down and
+    /// recreate SwiftUI's own tracking area mid-animation, and re-adding a
+    /// tracking area while the cursor already sits inside its rect makes
+    /// AppKit fire a spurious exit-then-re-enter pair, which restarts the
+    /// animation, which repeats it — a real, if short-lived, feedback
+    /// loop. This view's own identity is stable across those re-renders
+    /// (SwiftUI only calls `updateNSView`, never recreates it), so its
+    /// tracking area is never torn down for that reason.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseEnteredAndExited], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHoverChange?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverChange?(false)
+    }
+
     override func mouseDown(with event: NSEvent) {
         startLocation = event.locationInWindow
-        lastReorderTarget = nil
         isDraggingToReorder = false
+        dragOriginalFrames = windowManager?.iconFrames ?? [:]
         pendingLongPress?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             self?.pendingLongPress = nil
@@ -90,10 +133,7 @@ private final class PressAndHoldView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        defer {
-            lastReorderTarget = nil
-            isDraggingToReorder = false
-        }
+        defer { isDraggingToReorder = false }
         // A completed reorder drag, or a long-press that already fired,
         // shouldn't *also* register as a tap on release.
         guard !isDraggingToReorder, let pendingLongPress, !pendingLongPress.isCancelled else { return }
@@ -102,19 +142,66 @@ private final class PressAndHoldView: NSView {
         onTap?()
     }
 
+    /// A drop point that isn't over *any* icon still needs to resolve to the
+    /// nearest one — see `verticalTolerance`'s doc comment just below.
+    private static let verticalTolerance: CGFloat = 12
+
     /// `event.locationInWindow` is AppKit's bottom-left-origin, Y-up window
     /// space; `WindowManager.iconFrames` was captured in SwiftUI's
     /// top-left-origin, Y-down `"taskbarRoot"` space (see `TaskbarView`) —
     /// flipping Y by the window's own content height converts between the
     /// two, the same trick `StartMenuState`'s outside-click detection
     /// already uses for the same reason.
+    ///
+    /// Picks the closest icon by horizontal center, not the one whose own
+    /// frame strictly contains the point — each icon's reported frame is
+    /// only as wide as the icon itself, not the `effectiveTaskbarIconSpacing`
+    /// gap the HStack adds *between* icons, so a drop point landing in that
+    /// gap (easy to do between two icons sitting right next to each other)
+    /// used to match nothing and silently fail to reorder — exactly the
+    /// "can't insert between these two, have to jump past to the next one"
+    /// bug this replaces. `verticalTolerance` is similarly forgiving of the
+    /// cursor drifting slightly above/below the row mid-drag.
+    ///
+    /// Hit-tests against `dragOriginalFrames` (frozen at `mouseDown`), not
+    /// the live `WindowManager.iconFrames` — every reorder shuffles icons
+    /// into new positions with a 0.35s spring animation, and `iconFrames`
+    /// only catches up to those positions as SwiftUI actually re-renders
+    /// each frame of it. Reading the live dictionary meant a drag that kept
+    /// re-evaluating its target every tick (needed for reversing a drag —
+    /// see `WindowManager.reorder`'s own no-op guard) could pick a target
+    /// based on stale, still-mid-flight coordinates, re-trigger another
+    /// reorder before the first had settled, and thrash: two rapid,
+    /// conflicting reorders landing faster than SwiftUI could animate
+    /// between them left two icons' views visually overlapping in the same
+    /// spot. The original layout's slot positions don't actually move
+    /// (only which icon occupies which slot does), so freezing them for the
+    /// whole gesture and only ever comparing the live cursor point against
+    /// that fixed snapshot removes the race entirely.
     private func reorderIfNeeded(at locationInWindow: NSPoint, draggedBundleIdentifier: String) {
         guard let windowManager, let contentHeight = window?.contentView?.bounds.height else { return }
         let point = CGPoint(x: locationInWindow.x, y: contentHeight - locationInWindow.y)
-        guard let target = windowManager.iconFrames.first(where: { $0.key != draggedBundleIdentifier && $0.value.contains(point) })?.key,
-              target != lastReorderTarget else { return }
-        lastReorderTarget = target
-        windowManager.reorder(draggedBundleIdentifier: draggedBundleIdentifier, droppedOnBundleIdentifier: target)
+        let candidates = dragOriginalFrames.filter {
+            $0.key != draggedBundleIdentifier
+                && point.y >= $0.value.minY - Self.verticalTolerance
+                && point.y <= $0.value.maxY + Self.verticalTolerance
+        }
+        guard let targetEntry = candidates.min(by: { abs($0.value.midX - point.x) < abs($1.value.midX - point.x) }) else { return }
+        // No "already tried this target" guard here any more — `WindowManager.reorder`
+        // itself now bails out when the resulting order wouldn't actually
+        // change, which is what lets passing over an icon, continuing past
+        // it, and coming straight back to that same icon trigger a second,
+        // different reorder instead of silently doing nothing.
+        //
+        // Which side to land on comes from the cursor's own position
+        // relative to the target's (frozen) midpoint — not from comparing
+        // indices, which flips every time this fires against the *same*
+        // static target and used to oscillate forever (see
+        // `WindowManager.reorder`'s doc comment). A fixed cursor position
+        // always reads the same side, so repeat calls settle instead of
+        // fighting each other.
+        let insertBefore = point.x < targetEntry.value.midX
+        windowManager.reorder(draggedBundleIdentifier: draggedBundleIdentifier, droppedOnBundleIdentifier: targetEntry.key, insertBefore: insertBefore)
     }
 }
 
@@ -123,6 +210,7 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
     let bundleIdentifier: String?
     let onTap: () -> Void
     let onLongPress: () -> Void
+    let onHoverChange: (Bool) -> Void
 
     func makeNSView(context: Context) -> PressAndHoldView {
         let view = PressAndHoldView()
@@ -130,6 +218,7 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
         view.bundleIdentifier = bundleIdentifier
         view.onTap = onTap
         view.onLongPress = onLongPress
+        view.onHoverChange = onHoverChange
         return view
     }
 
@@ -138,17 +227,21 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
         nsView.bundleIdentifier = bundleIdentifier
         nsView.onTap = onTap
         nsView.onLongPress = onLongPress
+        nsView.onHoverChange = onHoverChange
     }
 }
 
 extension View {
-    /// A short tap does `onTap` normally, or opens the icon picker instead
-    /// if `WindowManager.isEditingIcons` is already on; holding past 0.45s
-    /// enters that edit mode; dragging while already editing reorders
-    /// (see `PressAndHoldView`). Also reports this icon's own frame into
-    /// `WindowManager.iconFrames` (see `reportsIconFrame`), so every other
-    /// icon's own drag can find it as a possible target.
-    func iconPressAndHold(windowManager: WindowManager, bundleIdentifier: String?, onTap: @escaping () -> Void) -> some View {
+    /// A short tap does `onTap` normally; holding past 0.45s enters edit
+    /// mode; dragging while already editing reorders (see `PressAndHoldView`).
+    /// A left tap does nothing while already editing — changing an icon's
+    /// picture is a right-click action instead (see each button view's own
+    /// `.contextMenu`), so a plain tap can't pop the file picker by
+    /// accident while you're just rearranging icons. Also reports this
+    /// icon's own frame into `WindowManager.iconFrames` (see
+    /// `reportsIconFrame`), so every other icon's own drag can find it as a
+    /// possible target.
+    func iconPressAndHold(windowManager: WindowManager, bundleIdentifier: String?, onTap: @escaping () -> Void, onHoverChange: @escaping (Bool) -> Void = { _ in }) -> some View {
         self
             .reportsIconFrame(bundleIdentifier: bundleIdentifier, windowManager: windowManager)
             .overlay(
@@ -156,15 +249,13 @@ extension View {
                     windowManager: windowManager,
                     bundleIdentifier: bundleIdentifier,
                     onTap: {
-                        if windowManager.isEditingIcons {
-                            windowManager.presentIconPicker(for: bundleIdentifier)
-                        } else {
-                            onTap()
-                        }
+                        guard !windowManager.isEditingIcons else { return }
+                        onTap()
                     },
                     onLongPress: {
                         windowManager.isEditingIcons = true
-                    }
+                    },
+                    onHoverChange: onHoverChange
                 )
             )
     }

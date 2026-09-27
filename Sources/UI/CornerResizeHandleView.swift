@@ -51,4 +51,7 @@ final class CornerResizeHandleView: NSView {
         // (deltaY is positive moving *down* the screen).
         onDrag?(event.deltaX, -event.deltaY)
     }
+
+    /// Same fix as `ResizeHandleView`'s.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

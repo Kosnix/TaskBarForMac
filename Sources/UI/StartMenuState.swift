@@ -43,6 +43,18 @@ final class StartMenuState {
     /// without needing to know about SwiftUI at all itself.
     var startButtonFrame: CGRect = .zero
 
+    /// Whether the mouse is currently over the start button — drives its
+    /// own `.hoverLift` (`TaskbarView.startButton(theme:)`), matching every
+    /// other taskbar icon's hover effect.
+    var isStartButtonHovered = false
+
+    /// Which row (by whatever id its own list uses) the mouse is currently
+    /// over, across every start-menu layout's own lists — a plain `.onHover`
+    /// is safe here (unlike a taskbar icon's, see `IconPressGesture.swift`)
+    /// since these rows don't drive an animated scale/shadow off this same
+    /// state, just a static background tint.
+    var hoveredRowID: String?
+
     /// The Windows 11 layout's "Épinglé" toggle (see
     /// `Windows11StartMenuView`) — irrelevant to the Kickoff layout, kept
     /// here rather than view-local `@State` for the same reason every

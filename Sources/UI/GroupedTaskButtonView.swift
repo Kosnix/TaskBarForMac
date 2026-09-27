@@ -27,6 +27,7 @@ struct GroupedTaskButtonView: View {
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
                     .wiggle(isActive: windowManager.isEditingIcons, seed: bundleIdentifier.hashValue)
+                    .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
             }
             windowCountBadge
         }
@@ -39,7 +40,6 @@ struct GroupedTaskButtonView: View {
         // fixing the start button's own padding could touch, since it was
         // never the start button's gap to begin with.
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
-        .background(backgroundColor)
         // Positioned by hand, pinned to the button's own bottom edge — see
         // `TaskButtonView`'s identical overlay for why a plain `.overlay`
         // on the icon isn't enough (the icon can float vertically centered
@@ -50,19 +50,30 @@ struct GroupedTaskButtonView: View {
                 .offset(x: tokens.effectiveTaskbarEdgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
         }
         .overlay(activeUnderline, alignment: .bottom)
-        .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
+        // No more `.clipShape` — see `TaskButtonView`'s identical removal.
         .contentShape(Rectangle())
         .help(appName)
-        .onHover { hovering in
-            windowManager.setGroupHovered(bundleIdentifier, hovering: hovering)
-        }
         .contextMenu {
-            Button(windowManager.isPinned(bundleIdentifier: bundleIdentifier) ? L("taskbar.unpin") : L("taskbar.pin")) {
-                windowManager.togglePin(pid: windows.first?.pid ?? 0, bundleIdentifier: bundleIdentifier, displayName: appName)
+            // Unpinning specifically is edit-mode-only (see `TaskButtonView`).
+            if windowManager.isPinned(bundleIdentifier: bundleIdentifier) {
+                if windowManager.isEditingIcons {
+                    Button(L("taskbar.unpin")) {
+                        windowManager.togglePin(pid: windows.first?.pid ?? 0, bundleIdentifier: bundleIdentifier, displayName: appName)
+                    }
+                }
+            } else {
+                Button(L("taskbar.pin")) {
+                    windowManager.togglePin(pid: windows.first?.pid ?? 0, bundleIdentifier: bundleIdentifier, displayName: appName)
+                }
             }
-            if windowManager.isEditingIcons, windowManager.hasCustomIcon(bundleIdentifier: realBundleIdentifier) {
-                Button(L("icon_edit.restore_original")) {
-                    windowManager.restoreOriginalIcon(for: realBundleIdentifier)
+            if windowManager.isEditingIcons {
+                Button(L("icon_edit.change")) {
+                    windowManager.presentIconPicker(for: realBundleIdentifier)
+                }
+                if windowManager.hasCustomIcon(bundleIdentifier: realBundleIdentifier) {
+                    Button(L("icon_edit.restore_original")) {
+                        windowManager.restoreOriginalIcon(for: realBundleIdentifier)
+                    }
                 }
             }
         }
@@ -94,6 +105,8 @@ struct GroupedTaskButtonView: View {
             if let first = windows.first {
                 windowManager.raise(first)
             }
+        } onHoverChange: { hovering in
+            windowManager.setGroupHovered(bundleIdentifier, hovering: hovering)
         }
     }
 
@@ -105,12 +118,8 @@ struct GroupedTaskButtonView: View {
 
     /// Same 0.3 Breeze `Metrics::Blend_Value` hover alpha used by
     /// `TaskButtonView` — see that file for the source reference.
-    private var backgroundColor: Color {
-        let accent = Color(hex: tokens.colors.accent)
-        if isHovered { return accent.opacity(0.3) }
-        if anyActive { return accent.opacity(0.15) }
-        return .clear
-    }
+    // Neither an active group nor hover get a flat background tint any
+    // more — matching `TaskButtonView`.
 
     private static let minimizedDotSize: CGFloat = 4
     private static let minimizedDotBottomInset: CGFloat = 2

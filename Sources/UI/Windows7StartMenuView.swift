@@ -167,7 +167,8 @@ struct Windows7StartMenuView: View {
     }
 
     private func programRow(_ app: DisplayApp, isSelected: Bool) -> some View {
-        Button {
+        let isHovered = state.hoveredRowID == app.id
+        return Button {
             state.selectedIndex = displayedApps.firstIndex(where: { $0.id == app.id }) ?? state.selectedIndex
             launch(app)
         } label: {
@@ -182,15 +183,46 @@ struct Windows7StartMenuView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isSelected ? Color(hex: tokens.colors.buttonBackgroundActive).opacity(0.3) : Color.clear)
+            .background(
+                // Aero's own selection highlight is a glassy gradient, not a
+                // flat tint — darker at the bottom than the top, with a
+                // bright sliver right at the top edge to read as "glossy".
+                // A hovered-but-not-selected row gets the same treatment,
+                // just fainter, so moving the mouse down the list previews
+                // what clicking (or arrowing onto it) would look like.
+                isSelected
+                    ? LinearGradient(colors: [Color(hex: tokens.colors.accent).opacity(0.55), Color(hex: tokens.colors.accent).opacity(0.28)], startPoint: .top, endPoint: .bottom)
+                    : isHovered
+                        ? LinearGradient(colors: [Color(hex: tokens.colors.accent).opacity(0.25), Color(hex: tokens.colors.accent).opacity(0.1)], startPoint: .top, endPoint: .bottom)
+                        : LinearGradient(colors: [.clear, .clear], startPoint: .top, endPoint: .bottom)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(alignment: .top) {
+            if isSelected || isHovered {
+                RoundedRectangle(cornerRadius: 4)
+                    // `accentText` (not a hardcoded white) — the token
+                    // every theme already defines as "a light color that
+                    // reads on top of `accent`", exactly what a gloss
+                    // highlight sitting over the accent-tinted selection
+                    // needs, so this follows whatever the active theme's
+                    // own contrast color actually is instead of assuming
+                    // every theme wants a plain white sheen.
+                    .fill(LinearGradient(colors: [Color(hex: tokens.colors.accentText).opacity(isSelected ? 0.4 : 0.22), .clear], startPoint: .top, endPoint: .bottom))
+                    .frame(height: 8)
+                    .padding(.horizontal, 1)
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(Color(hex: tokens.colors.accent), lineWidth: isSelected ? 2 : 0)
+                .strokeBorder(Color(hex: tokens.colors.accent).opacity(isSelected ? 0.9 : (isHovered ? 0.5 : 0)), lineWidth: 1)
         )
+        .onHover { hovering in
+            state.hoveredRowID = hovering ? app.id : (state.hoveredRowID == app.id ? nil : state.hoveredRowID)
+        }
         .contextMenu {
             Button(windowManager.isPinned(bundleIdentifier: app.bundleIdentifier) ? L("taskbar.unpin") : L("taskbar.pin")) {
                 windowManager.isPinned(bundleIdentifier: app.bundleIdentifier)
@@ -253,7 +285,21 @@ struct Windows7StartMenuView: View {
             shutDownRow
         }
         .frame(width: Self.rightColumnWidth)
-        .background(Color(hex: tokens.colors.buttonBackground).opacity(0.35))
+        // A vertical frosted-glass tint (a hint of accent up top, fading to
+        // the plain button background) instead of a single flat color —
+        // the real Aero sidebar's own subtle gradient, not just a tint.
+        .background(
+            LinearGradient(
+                colors: [Color(hex: tokens.colors.accent).opacity(0.18), Color(hex: tokens.colors.buttonBackground).opacity(0.4)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color(hex: tokens.colors.separator).opacity(0.5))
+                .frame(width: 1)
+        }
     }
 
     private var accountHeader: some View {
@@ -277,6 +323,7 @@ struct Windows7StartMenuView: View {
                     }
                 }
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(hex: tokens.colors.textSecondary).opacity(0.4)))
+                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
             .help(L("account.open_settings"))
@@ -290,7 +337,9 @@ struct Windows7StartMenuView: View {
     }
 
     private func quickLinkRow(icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let rowID = "quick-\(label)"
+        let isHovered = state.hoveredRowID == rowID
+        return Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 13))
@@ -301,10 +350,18 @@ struct Windows7StartMenuView: View {
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Color(hex: tokens.colors.textPrimary))
+            .padding(.horizontal, 6)
             .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(hex: tokens.colors.accent).opacity(isHovered ? 0.18 : 0))
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            state.hoveredRowID = hovering ? rowID : (state.hoveredRowID == rowID ? nil : state.hoveredRowID)
+        }
     }
 
     private enum QuickFolder { case documents, pictures, music, downloads, home, trash }
@@ -335,7 +392,7 @@ struct Windows7StartMenuView: View {
         HStack(spacing: 0) {
             Button(action: SessionManager.shutDown) {
                 Text(L("session.shutdown"))
-                    .font(.system(size: tokens.typography.fontSize, weight: .medium))
+                    .font(.system(size: tokens.typography.fontSize, weight: .semibold))
                     .foregroundStyle(Color(hex: tokens.colors.accentText))
                     .frame(maxWidth: .infinity)
             }
@@ -345,8 +402,29 @@ struct Windows7StartMenuView: View {
             NativeMenuButton(systemImage: "chevron.up", size: 10, tintColor: Color(hex: tokens.colors.accentText), makeMenu: sessionMenu)
                 .frame(width: 28)
         }
-        .background(Color(hex: tokens.colors.buttonBackgroundActive).opacity(0.9))
+        // A glossy button, not a flat one — the real Aero "Shut down" pill
+        // is a top-to-bottom gradient with a bright highlight right under
+        // the top edge, same glass language as the selection highlight and
+        // the sidebar tint above.
+        .background(
+            LinearGradient(
+                colors: [Color(hex: tokens.colors.accent), Color(hex: tokens.colors.buttonBackgroundActive)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .overlay(alignment: .top) {
+            // Same `accentText`-based gloss as the row highlight above,
+            // instead of a hardcoded white — see that one's doc comment.
+            RoundedRectangle(cornerRadius: 4)
+                .fill(LinearGradient(colors: [Color(hex: tokens.colors.accentText).opacity(0.35), .clear], startPoint: .top, endPoint: .bottom))
+                .frame(height: 12)
+                .padding(.horizontal, 1)
+                .allowsHitTesting(false)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.black.opacity(0.2), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
         .padding(8)
     }
 

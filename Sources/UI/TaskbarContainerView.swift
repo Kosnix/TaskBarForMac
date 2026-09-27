@@ -18,4 +18,10 @@ final class TaskbarContainerView: NSView {
         let menu = PersonalizationMenuBuilder.build(themeStore: themeStore, windowManager: windowManager)
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
+
+    /// Without this, the very first right-click while some other app is
+    /// frontmost only brings this panel forward instead of opening the
+    /// menu — same fix as `PressAndHoldView`'s, just for the bar's own
+    /// right-click menu instead of an icon's click.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

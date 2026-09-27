@@ -11,7 +11,6 @@ final class TaskbarPanel: NSPanel {
     private let startMenuPanel: StartMenuPanel
     private let startMenuState: StartMenuState
     private let groupHoverPanel: GroupHoverPanel
-    private static let resizeHandleThickness: CGFloat = 5
 
     // MARK: Auto-hide (Windows-style: retract off-screen except a thin
     // hover-to-reveal sliver when the mouse isn't near it)
@@ -86,26 +85,10 @@ final class TaskbarPanel: NSPanel {
         hostingView.autoresizingMask = [.width, .height]
         container.addSubview(hostingView)
 
-        let handle = ResizeHandleView(frame: NSRect(
-            x: 0,
-            y: container.bounds.height - Self.resizeHandleThickness,
-            width: container.bounds.width,
-            height: Self.resizeHandleThickness
-        ))
-        handle.autoresizingMask = [.width, .minYMargin]
-        handle.onDrag = { [weak themeStore] delta in
-            guard let themeStore else { return }
-            let current: CGFloat
-            if let override = themeStore.panelHeightOverride {
-                current = CGFloat(override)
-            } else {
-                current = themeStore.effectivePanelHeight
-            }
-            let newHeight = min(160, max(22, current + delta))
-            themeStore.panelHeightOverride = Double(newHeight)
-        }
-        container.addSubview(handle)
-
+        // No drag-to-resize handle on the bar itself any more — bar height
+        // is a Settings-only control now (the "Bar Size" slider, still
+        // backed by this same `panelHeightOverride`), not something a
+        // stray drag on the top edge should be able to change by accident.
         contentView = container
 
         NotificationCenter.default.addObserver(

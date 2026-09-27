@@ -75,4 +75,9 @@ final class ClickableMenuView: NSView {
         guard let menu = menuProvider?() else { return }
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: bounds.height + 4), in: self)
     }
+
+    /// Same reasoning as `PressAndHoldView` — without this, a click here
+    /// while some other app is frontmost just brings this panel forward
+    /// instead of opening the menu, needing a second click to actually work.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

@@ -39,6 +39,7 @@ struct TaskbarView: View {
         theme.tokens.taskButton.displayStyle = themeStore.effectiveTaskDisplayStyle
         theme.tokens.taskbarIconRatio = themeStore.taskbarIconRatio
         theme.tokens.taskbarIconSpacingRatio = themeStore.taskbarIconSpacingRatio
+        theme.tokens.taskbarIconHoverZoomRatio = themeStore.taskbarIconHoverZoomRatio
         if !themeStore.clockEnabled {
             // Strip it out of every zone up front, rather than just
             // rendering nothing where it would go — that would still leave
@@ -297,6 +298,7 @@ struct TaskbarView: View {
                     colorHex: tokens.colors.textPrimary,
                     size: tokens.startButton.fillHeight == true ? tokens.panel.height : tokens.taskbarIconSize
                 )
+                .hoverLift(isHovered: startMenuState.isStartButtonHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom, disablesHitTesting: false)
                 if tokens.startButton.showLabel {
                     Text(tokens.startButton.label)
                         .font(.system(size: tokens.typography.fontSize, weight: .medium))
@@ -313,6 +315,9 @@ struct TaskbarView: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .onHover { isHovering in
+            startMenuState.isStartButtonHovered = isHovering
+        }
         // No longer presented as a SwiftUI `.popover` — see
         // `StartMenuPanel`, a real resizable window that `TaskbarPanel`
         // shows/hides by observing `startMenuState.isPresented` directly.

@@ -124,6 +124,17 @@ struct ThemeTokens: Codable, Equatable {
         guard ratio < 0 else { return CGFloat(spacing.edgePadding) }
         return max(0, CGFloat(spacing.edgePadding) * CGFloat(1 + ratio))
     }
+
+    /// Same override mechanism as `taskbarIconRatio`/`taskbarIconSpacingRatio`
+    /// — how much a taskbar icon grows on hover (`.hoverLift`), as a plain
+    /// fraction (0.12 = +12%) rather than a fixed point amount, so it scales
+    /// sensibly whatever size the icon itself ends up being.
+    var taskbarIconHoverZoomRatio: Double?
+    static let defaultTaskbarIconHoverZoomRatio: Double = 0.10
+
+    var effectiveTaskbarIconHoverZoom: Double {
+        taskbarIconHoverZoomRatio ?? Self.defaultTaskbarIconHoverZoomRatio
+    }
 }
 
 /// `layout.json` — which modules appear in which zone of the panel.

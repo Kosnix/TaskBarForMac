@@ -19,6 +19,33 @@ struct LauncherButtonView: View {
     private var iconSize: CGFloat { tokens.taskbarIconSize }
 
     var body: some View {
+        // Every action this button's context menu could offer (unpin,
+        // change icon, restore icon) only applies while editing — outside
+        // that mode there's nothing to show, and attaching `.contextMenu`
+        // with an empty builder still pops up a blank menu on right-click
+        // rather than nothing at all. Only attaching the modifier itself
+        // while editing is what actually suppresses the menu entirely for
+        // an app that isn't open.
+        if windowManager.isEditingIcons {
+            content.contextMenu {
+                Button(L("taskbar.unpin")) {
+                    windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
+                }
+                Button(L("icon_edit.change")) {
+                    windowManager.presentIconPicker(for: app.bundleIdentifier)
+                }
+                if windowManager.hasCustomIcon(bundleIdentifier: app.bundleIdentifier) {
+                    Button(L("icon_edit.restore_original")) {
+                        windowManager.restoreOriginalIcon(for: app.bundleIdentifier)
+                    }
+                }
+            }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         // Icon only, always — "icon + name" only ever applies to actually
         // open windows; a pinned-but-closed launcher stays icon-only
         // regardless, matching how the real Dock never shows names either.
@@ -27,32 +54,21 @@ struct LauncherButtonView: View {
                 .resizable()
                 .frame(width: iconSize, height: iconSize)
                 .wiggle(isActive: windowManager.isEditingIcons, seed: app.id.hashValue)
+                .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
         }
         .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
-        .background(isHovered ? Color(hex: tokens.colors.accent).opacity(0.3) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))
+        // No more `.clipShape` — see `TaskButtonView`'s identical removal.
         .contentShape(Rectangle())
         .help(app.displayName)
-        .onHover { isHovering in
-            windowManager.hoveredWindowID = isHovering ? "launcher-\(app.id)" : (windowManager.hoveredWindowID == "launcher-\(app.id)" ? nil : windowManager.hoveredWindowID)
-        }
-        .contextMenu {
-            Button(L("taskbar.unpin")) {
-                windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
-            }
-            if windowManager.isEditingIcons, windowManager.hasCustomIcon(bundleIdentifier: app.bundleIdentifier) {
-                Button(L("icon_edit.restore_original")) {
-                    windowManager.restoreOriginalIcon(for: app.bundleIdentifier)
-                }
-            }
-        }
         .taskReorderable(bundleIdentifier: app.bundleIdentifier, windowManager: windowManager) {
             windowManager.launch(app)
         }
         // Last: needs to sit on top of `.taskReorderable`'s own `.onDrop`
         // target to actually receive left-clicks — see
         // `IconPressGesture.swift`'s doc comment.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch)
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch) { isHovering in
+            windowManager.hoveredWindowID = isHovering ? "launcher-\(app.id)" : (windowManager.hoveredWindowID == "launcher-\(app.id)" ? nil : windowManager.hoveredWindowID)
+        }
     }
 }

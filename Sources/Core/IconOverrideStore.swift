@@ -16,6 +16,14 @@ enum IconOverrideStore {
         return base
     }()
 
+    /// `customIcon(for:)` is read on every hover-state change (see
+    /// `WindowManager.resolvedIcon`), same as `PinnedApp.icon` used to be —
+    /// without this cache, `NSImage(contentsOf:)` would hand back a fresh
+    /// image instance loaded from disk each time, swapping the icon's
+    /// identity right as the hover-zoom animation starts and causing the
+    /// same flicker that `PinnedApp.icon` had.
+    private static var cache: [String: NSImage] = [:]
+
     private static func fileURL(for bundleIdentifier: String) -> URL {
         // Bundle identifiers are dot-separated, never contain a literal
         // slash, but this guards against anything unexpected ending up as
@@ -26,9 +34,11 @@ enum IconOverrideStore {
 
     static func customIcon(for bundleIdentifier: String?) -> NSImage? {
         guard let bundleIdentifier else { return nil }
+        if let cached = cache[bundleIdentifier] { return cached }
         let url = fileURL(for: bundleIdentifier)
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        return NSImage(contentsOf: url)
+        guard FileManager.default.fileExists(atPath: url.path), let image = NSImage(contentsOf: url) else { return nil }
+        cache[bundleIdentifier] = image
+        return image
     }
 
     static func setCustomIcon(_ image: NSImage, for bundleIdentifier: String) {
@@ -36,9 +46,11 @@ enum IconOverrideStore {
               let rep = NSBitmapImageRep(data: tiff),
               let data = rep.representation(using: .png, properties: [:]) else { return }
         try? data.write(to: fileURL(for: bundleIdentifier))
+        cache[bundleIdentifier] = image
     }
 
     static func removeCustomIcon(for bundleIdentifier: String) {
         try? FileManager.default.removeItem(at: fileURL(for: bundleIdentifier))
+        cache[bundleIdentifier] = nil
     }
 }

@@ -161,6 +161,16 @@ struct SettingsView: View {
                     }
                     Slider(value: taskbarIconSpacingDisplay, in: 0...100, step: 5)
                 }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(L("settings.icon_hover_zoom"))
+                        Spacer()
+                        Text("\(Int((themeStore.taskbarIconHoverZoomRatio * 100).rounded())) %")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $themeStore.taskbarIconHoverZoomRatio, in: 0...0.4, step: 0.02)
+                }
                 Picker(L("settings.alignment"), selection: alignment) {
                     ForEach([Alignment.left, .center, .centerWithStart], id: \.self) { option in
                         Text(option.label).tag(option)

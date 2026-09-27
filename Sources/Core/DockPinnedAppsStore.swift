@@ -17,10 +17,17 @@ struct PinnedApp: Identifiable {
     /// icons ("?" placeholders). Reordering now reuses this untouched
     /// wherever it exists, instead of ever reconstructing an existing pin.
     let rawEntry: [String: Any]?
-
-    var icon: NSImage {
-        NSWorkspace.shared.icon(forFile: url.path)
-    }
+    /// Fetched once, at parse time — `NSWorkspace.shared.icon(forFile:)`
+    /// hands back a fresh `NSImage` instance on every call, unlike
+    /// `AppWindow.appIcon` (fetched once per refresh and stored). A computed
+    /// property here used to re-run that lookup every time a launcher's
+    /// `isHovered` changed (since that forces `LauncherButtonView`'s body to
+    /// re-evaluate, which reads `app.icon`), swapping in a brand new image
+    /// identity right as the hover-zoom animation started — SwiftUI has no
+    /// way to animate between two unrelated `NSImage` instances, so that
+    /// swap is exactly the flicker seen only on not-yet-running (pinned)
+    /// icons and never on running windows.
+    let icon: NSImage
 }
 
 extension PinnedApp: Equatable {
@@ -159,6 +166,7 @@ enum DockPinnedAppsStore {
         }
         let label = (tileData["file-label"] as? String) ?? url.deletingPathExtension().lastPathComponent
         let bundleIdentifier = Bundle(url: url)?.bundleIdentifier
-        return PinnedApp(url: url, displayName: label, bundleIdentifier: bundleIdentifier, rawEntry: entry)
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        return PinnedApp(url: url, displayName: label, bundleIdentifier: bundleIdentifier, rawEntry: entry, icon: icon)
     }
 }
