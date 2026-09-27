@@ -424,7 +424,7 @@ final class ThemeStore {
     private static let startMenuStyleKey = "TB.startMenu.style"
 
     /// Which UI the start button opens — see `StartMenuStyle`.
-    var startMenuStyle: StartMenuStyle = .kickoff {
+    var startMenuStyle: StartMenuStyle = .windows7 {
         didSet {
             UserDefaults.standard.set(startMenuStyle.rawValue, forKey: Self.startMenuStyleKey)
         }
@@ -452,8 +452,12 @@ final class ThemeStore {
     private var watchedDescriptor: CInt = -1
     private var reloadWorkItem: DispatchWorkItem?
 
-    init(preferredThemeID: String = "breeze-dark") {
-        liquidGlassEnabled = UserDefaults.standard.bool(forKey: Self.liquidGlassEnabledKey)
+    init(preferredThemeID: String = "macos-dark") {
+        // Every fallback below (used only on a fresh install/reset, i.e. no
+        // matching UserDefaults key yet) matches whatever this app's own
+        // settings actually were at the time these defaults were last
+        // updated — not the original, more conservative shipped defaults.
+        liquidGlassEnabled = (UserDefaults.standard.object(forKey: Self.liquidGlassEnabledKey) as? Bool) ?? true
         autoHideEnabled = UserDefaults.standard.bool(forKey: Self.autoHideEnabledKey)
         centerTaskListEnabled = UserDefaults.standard.bool(forKey: Self.centerTaskListEnabledKey)
         centerIncludesStartButton = UserDefaults.standard.bool(forKey: Self.centerIncludesStartButtonKey)
@@ -465,17 +469,17 @@ final class ThemeStore {
         if let storedIntensity = UserDefaults.standard.object(forKey: Self.liquidGlassIntensityKey) as? Double {
             liquidGlassIntensity = storedIntensity
         } else {
-            liquidGlassIntensity = 0.35
+            liquidGlassIntensity = 0.28150390625
         }
         if let storedRatio = UserDefaults.standard.object(forKey: Self.taskbarIconRatioKey) as? Double {
             taskbarIconRatio = storedRatio
         } else {
-            taskbarIconRatio = ThemeTokens.defaultTaskbarIconRatio
+            taskbarIconRatio = 0.75
         }
         if let storedSpacingRatio = UserDefaults.standard.object(forKey: Self.taskbarIconSpacingRatioKey) as? Double {
             taskbarIconSpacingRatio = storedSpacingRatio
         } else {
-            taskbarIconSpacingRatio = ThemeTokens.defaultTaskbarIconSpacingRatio
+            taskbarIconSpacingRatio = -0.4
         }
         if let storedHoverZoomRatio = UserDefaults.standard.object(forKey: Self.taskbarIconHoverZoomRatioKey) as? Double {
             taskbarIconHoverZoomRatio = storedHoverZoomRatio
@@ -486,9 +490,13 @@ final class ThemeStore {
         if let storedWidth = UserDefaults.standard.object(forKey: Self.startMenuWidthOverrideKey) as? Double,
            let storedHeight = UserDefaults.standard.object(forKey: Self.startMenuHeightOverrideKey) as? Double {
             startMenuSizeOverride = CGSize(width: storedWidth, height: storedHeight)
+        } else {
+            startMenuSizeOverride = CGSize(width: 513, height: 663)
         }
         if let stored = UserDefaults.standard.object(forKey: Self.heightOverrideKey) as? Double {
             panelHeightOverride = stored
+        } else {
+            panelHeightOverride = 40
         }
         if let stored = UserDefaults.standard.string(forKey: Self.taskDisplayStyleOverrideKey) {
             taskDisplayStyleOverride = stored
