@@ -35,6 +35,11 @@ struct TaskButtonView: View {
                     .frame(width: iconSize, height: iconSize)
                     .wiggle(isActive: windowManager.isEditingIcons, seed: window.id.hashValue)
                     .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
+                    // A single open window needs no indicator at all — only
+                    // once it's minimized is there anything worth flagging,
+                    // shown as "1" in the same badge style
+                    // `GroupedTaskButtonView` uses for its own window count.
+                    .taskWindowCountBadge(window.isMinimized ? .empty : nil, accentColor: Color(hex: tokens.colors.accent))
             }
             if showLabel {
                 Text(window.title)
@@ -50,20 +55,6 @@ struct TaskButtonView: View {
         // with modest content otherwise leaves empty space before the icon
         // too, not just after it).
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
-        // Positioned by hand (not a plain `.overlay` on the icon) — the
-        // icon sits inside an `HStack` whose default cross-axis alignment
-        // is `.center`, so when the button is taller than the icon (icon
-        // shrunk by the fixed 16pt inset, button only by 8pt) the icon
-        // itself floats vertically centered within that extra height —
-        // and a dot attached to the icon would float right along with it,
-        // away from the button's true bottom edge. Horizontal position
-        // still tracks the icon (its known offset from the leading edge:
-        // the button's own edge padding, then half the icon's width);
-        // vertical position is pinned to the button's bottom edge only.
-        .overlay(alignment: .bottomLeading) {
-            minimizedDot
-                .offset(x: tokens.effectiveTaskbarEdgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
-        }
         .overlay(activeUnderline, alignment: .bottom)
         // No more `.clipShape` here — there's no background fill left to
         // round the corners of (see `backgroundColor`'s removal above),
@@ -83,15 +74,10 @@ struct TaskButtonView: View {
                 }
                 Divider()
             }
-            // Unpinning specifically is edit-mode-only (detaching an icon
-            // is an edit, same as reordering/re-skinning one) — pinning a
-            // not-yet-pinned one isn't, since that's not removing anything
-            // from the bar.
+            // Unpinning works outside edit mode too now.
             if windowManager.isPinned(bundleIdentifier: window.bundleIdentifier) {
-                if windowManager.isEditingIcons {
-                    Button(L("taskbar.unpin")) {
-                        windowManager.togglePin(pid: window.pid, bundleIdentifier: window.bundleIdentifier, displayName: window.appName)
-                    }
+                Button(L("taskbar.unpin")) {
+                    windowManager.togglePin(pid: window.pid, bundleIdentifier: window.bundleIdentifier, displayName: window.appName)
                 }
             } else {
                 Button(L("taskbar.pin")) {
@@ -128,22 +114,6 @@ struct TaskButtonView: View {
     // Neither a running window nor hover get a flat background tint any
     // more — an open app reads from `activeUnderline` alone, and hover
     // reads from `.hoverLift`'s scale/shadow instead of a filled block.
-
-    private static let minimizedDotSize: CGFloat = 4
-    private static let minimizedDotBottomInset: CGFloat = 2
-
-    // A minimized window used to just dim its whole button (opacity 0.6) —
-    // replaced with a small dot underneath, matching the real Dock's own
-    // "open app" indicator convention, so a minimized window still reads
-    // clearly (icon, label) and only the dot communicates its state.
-    @ViewBuilder
-    private var minimizedDot: some View {
-        if window.isMinimized {
-            Circle()
-                .fill(Color(hex: tokens.colors.textSecondary))
-                .frame(width: Self.minimizedDotSize, height: Self.minimizedDotSize)
-        }
-    }
 
     /// The theme's "active tab" underline (a different indicator style from
     /// the minimized dot) genuinely spans the whole button, not just the

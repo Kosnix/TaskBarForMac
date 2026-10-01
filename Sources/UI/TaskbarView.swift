@@ -1,6 +1,15 @@
 import AppKit
 import SwiftUI
 
+extension AnyTransition {
+    /// A not-yet-pinned app's icon joining the taskbar for the first time —
+    /// scales up from small while fading in, instead of just popping into
+    /// existence at full size. See `TaskbarView.taskList`'s own use of it.
+    static var taskbarAppearance: AnyTransition {
+        .scale(scale: 0).combined(with: .opacity)
+    }
+}
+
 /// Root content of the floating panel. Reads the active theme's `layout.json`
 /// to decide which modules go in the left/center/right zones, and its
 /// `tokens.json` to style them — no theme-specific code lives here.
@@ -380,6 +389,16 @@ struct TaskbarView: View {
                     TaskButtonView(window: window, tokens: tokens, windowManager: windowManager, width: itemWidth, showLabel: showLabels) {
                         windowManager.activateOrMinimize(window)
                     }
+                    // A pinned app's launcher icon is already sitting right
+                    // there when it opens — becoming a `.window` entry is
+                    // just a state change in place, not a new icon joining
+                    // the row, so it gets `.identity` (no transition at
+                    // all). An unpinned app's icon genuinely didn't exist a
+                    // moment ago; see `WindowManager.refresh`'s own
+                    // `withAnimation` for what actually drives this
+                    // transition (a plain `.animation(value:)` here wasn't
+                    // reliable for a change driven by a different object).
+                    .transition(windowManager.isPinned(bundleIdentifier: window.bundleIdentifier) ? .identity : .taskbarAppearance)
                 case .group(let bundleIdentifier, let appName, let appIcon, let groupWindows):
                     GroupedTaskButtonView(
                         bundleIdentifier: bundleIdentifier,
@@ -390,6 +409,7 @@ struct TaskbarView: View {
                         windowManager: windowManager,
                         width: itemWidth
                     )
+                    .transition(windowManager.isPinned(bundleIdentifier: bundleIdentifier) ? .identity : .taskbarAppearance)
                 case .launcher(let app):
                     // Always icon-only width, regardless of the "icon + name"
                     // setting or how wide open-window buttons are in this
@@ -398,6 +418,19 @@ struct TaskbarView: View {
                     LauncherButtonView(app: app, tokens: tokens, windowManager: windowManager, width: iconOnlyWidth) {
                         windowManager.launch(app)
                     }
+                    // A launcher entry disappears for one of two reasons:
+                    // the app just launched (about to reappear right here
+                    // as a `.window`/`.group` entry instead — no animation,
+                    // same as that insertion's own `.identity` case) or it
+                    // was just unpinned (genuinely leaving the row for
+                    // good). `isPinned` can't tell these apart — a
+                    // `.launcher` entry only ever exists *because* its app
+                    // is pinned, so at the moment one is being removed,
+                    // `isPinned` is unconditionally still `true` either
+                    // way, making that check a tautology here. Whether the
+                    // app now has a running window does distinguish them:
+                    // true only in the "just launched" case.
+                    .transition(windowManager.windows.contains { $0.bundleIdentifier == app.bundleIdentifier } ? .identity : .taskbarAppearance)
                 }
             }
             if !permissions.isTrusted {

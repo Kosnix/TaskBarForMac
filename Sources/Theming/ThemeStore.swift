@@ -49,6 +49,12 @@ enum StartMenuStyle: String, CaseIterable {
     /// Opens the real, system Spotlight instead of any menu this app draws
     /// itself — see `SpotlightTrigger`.
     case realSpotlight
+    /// macOS's own (now-retired) Launchpad: a full-screen, paginated grid
+    /// of every installed app over a blurred/dimmed desktop, with a
+    /// type-to-search field at the top. Unlike every other style, this one
+    /// doesn't live in the small anchored `StartMenuPanel` — see that
+    /// type's own `frame(themeStore:)` for the full-screen special case.
+    case launchpad
 }
 
 /// One theme "family" (e.g. "Breeze", "Windows 7") — a `-light`/`-dark`
@@ -361,6 +367,12 @@ final class ThemeStore {
             return CGSize(width: max(floor.width, width), height: floor.height)
         case .windows7:
             return floor
+        case .launchpad:
+            // Never actually consulted — `StartMenuPanel.frame(themeStore:)`
+            // sizes this style to the whole screen instead of reading
+            // `effectiveStartMenuSize`/this floor at all. Here only to keep
+            // the switch exhaustive.
+            return floor
         }
     }
 
@@ -430,6 +442,45 @@ final class ThemeStore {
         }
     }
 
+    private static let startMenuTriggerModifierKey = "TB.startMenu.triggerModifier"
+
+    /// Which modifier, tapped alone, toggles the start menu —
+    /// `ShortcutsManager` reads this instead of always watching ⌘. `.none`
+    /// turns that gesture off entirely for someone who only wants
+    /// `startMenuCustomShortcut` below, or neither.
+    var startMenuTriggerModifier: StartMenuTriggerModifier = .command {
+        didSet {
+            UserDefaults.standard.set(startMenuTriggerModifier.rawValue, forKey: Self.startMenuTriggerModifierKey)
+        }
+    }
+
+    private static let startMenuShortcutKeyCodeKey = "TB.startMenu.shortcutKeyCode"
+    private static let startMenuShortcutModifiersKey = "TB.startMenu.shortcutModifiers"
+
+    /// An optional full key combination, on top of (not instead of) the
+    /// solo-modifier-tap above — `nil` means none is set. Defaults to the
+    /// existing ⌃⌥Space this app has always answered to (see
+    /// `ShortcutsManager`'s own doc comment for why that one specifically),
+    /// so upgrading doesn't silently take away a shortcut someone already
+    /// relies on; from here it's just this setting's own starting value,
+    /// freely reassignable or clearable like any other.
+    var startMenuCustomShortcut: StartMenuShortcut? = StartMenuShortcut(keyCode: 0x31, modifiers: [.control, .option]) {
+        didSet {
+            if let shortcut = startMenuCustomShortcut {
+                UserDefaults.standard.set(Int(shortcut.keyCode), forKey: Self.startMenuShortcutKeyCodeKey)
+                UserDefaults.standard.set(Int(shortcut.modifiers.rawValue), forKey: Self.startMenuShortcutModifiersKey)
+            } else {
+                // A sentinel, not `removeObject` — the key needs to stay
+                // *present* in `UserDefaults` once cleared, specifically so
+                // `init` below can tell "explicitly cleared" apart from
+                // "never configured" (both would otherwise just read back
+                // as nothing there) and not silently resurrect the shipped
+                // default the next time this app launches.
+                UserDefaults.standard.set(-1, forKey: Self.startMenuShortcutKeyCodeKey)
+            }
+        }
+    }
+
     /// Mirrors `Localization.languageOverride` (the actual persisted,
     /// globally-readable value — `L(...)` is called from plenty of places
     /// that have no `ThemeStore` in reach, like `SessionManager`'s alert
@@ -465,6 +516,18 @@ final class ThemeStore {
         clockShowDate = UserDefaults.standard.bool(forKey: Self.clockShowDateKey)
         if let storedStyle = UserDefaults.standard.string(forKey: Self.startMenuStyleKey), let style = StartMenuStyle(rawValue: storedStyle) {
             startMenuStyle = style
+        }
+        if let storedModifier = UserDefaults.standard.string(forKey: Self.startMenuTriggerModifierKey),
+           let modifier = StartMenuTriggerModifier(rawValue: storedModifier) {
+            startMenuTriggerModifier = modifier
+        }
+        if let storedKeyCode = UserDefaults.standard.object(forKey: Self.startMenuShortcutKeyCodeKey) as? Int {
+            if storedKeyCode == -1 {
+                // Explicitly cleared — see the property's own `didSet`.
+                startMenuCustomShortcut = nil
+            } else if let storedModifiers = UserDefaults.standard.object(forKey: Self.startMenuShortcutModifiersKey) as? Int {
+                startMenuCustomShortcut = StartMenuShortcut(keyCode: UInt16(storedKeyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(storedModifiers)))
+            }
         }
         if let storedIntensity = UserDefaults.standard.object(forKey: Self.liquidGlassIntensityKey) as? Double {
             liquidGlassIntensity = storedIntensity

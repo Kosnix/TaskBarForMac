@@ -31,7 +31,7 @@ struct Windows11StartMenuView: View {
     private var displayedApps: [InstalledApp] {
         if !state.query.isEmpty {
             return appDiscovery.apps
-                .filter { $0.displayName.localizedCaseInsensitiveContains(state.query) }
+                .filter { displayName(for: $0).localizedCaseInsensitiveContains(state.query) }
         }
         return LaunchHistoryStore.sortedByRecency(appDiscovery.apps, bundleIdentifier: \.bundleIdentifier)
     }
@@ -102,7 +102,7 @@ struct Windows11StartMenuView: View {
             .frame(height: 20)
         }
         .padding(10)
-        .background(SearchFieldBackground(tokens: tokens))
+        .background(SearchFieldBackground(tokens: tokens, liquidGlassEnabled: liquidGlassEnabled, liquidGlassIntensity: liquidGlassIntensity))
         .padding(16)
     }
 
@@ -124,7 +124,7 @@ struct Windows11StartMenuView: View {
                 Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
-                Text(app.displayName)
+                Text(displayName(for: app))
                     .font(.system(size: tokens.typography.fontSize - 1))
                     .lineLimit(1)
                     .frame(width: iconSize + 20)
@@ -145,11 +145,26 @@ struct Windows11StartMenuView: View {
                     ? windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
                     : windowManager.pin(url: app.url, displayName: app.displayName)
             }
+            Button(L("menu.show_in_finder")) {
+                NSWorkspace.shared.activateFileViewerSelecting([app.url])
+            }
+            Button(L("menu.rename")) {
+                windowManager.promptRename(bundleIdentifier: app.bundleIdentifier, currentName: displayName(for: app))
+            }
+            if windowManager.hasCustomDisplayName(bundleIdentifier: app.bundleIdentifier) {
+                Button(L("icon_edit.restore_original_name")) {
+                    windowManager.restoreOriginalDisplayName(for: app.bundleIdentifier)
+                }
+            }
             Divider()
             Button(L("app.trash")) {
                 appDiscovery.confirmAndUninstall(app)
             }
         }
+    }
+
+    private func displayName(for app: InstalledApp) -> String {
+        windowManager.resolvedDisplayName(bundleIdentifier: app.bundleIdentifier, fallback: app.displayName)
     }
 
     private func launch(_ app: InstalledApp) {

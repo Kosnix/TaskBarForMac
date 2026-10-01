@@ -20,6 +20,13 @@ final class StartMenuState {
                 query = ""
                 selectedCategory = nil
                 focusedRegion = .grid
+                launchpadPage = 0
+                isEditingLaunchpad = false
+                openLaunchpadFolderID = nil
+                launchpadDragItemID = nil
+                launchpadDragSourceFolderID = nil
+                launchpadPendingOrder = nil
+                launchpadMergeTargetID = nil
             }
             onPresentationChange?(isPresented)
         }
@@ -67,8 +74,73 @@ final class StartMenuState {
     }
 
     var query = "" {
-        didSet { selectedIndex = 0 }
+        didSet {
+            selectedIndex = 0
+            launchpadPage = 0
+        }
     }
+
+    /// `LaunchpadStartMenuView`'s current page — searching always shows a
+    /// single flat grid of matches (no paging), so this only matters while
+    /// browsing normally; reset whenever a search starts (see `query`'s own
+    /// `didSet`) or the menu closes, same as every other piece of
+    /// per-session start-menu state.
+    var launchpadPage = 0
+
+    /// The iOS-springboard-style "jiggle" mode for `LaunchpadStartMenuView`
+    /// specifically — separate from `WindowManager.isEditingIcons` (which
+    /// is about the *taskbar's* pinned-icon order, a completely different
+    /// list), even though it reuses the exact same `.wiggle()` visual.
+    var isEditingLaunchpad = false
+
+    /// Which folder (by its `LaunchpadItem.id`) is currently expanded, if
+    /// any — `nil` means the main grid.
+    var openLaunchpadFolderID: String?
+
+    /// Which item is currently being dragged — set the moment its `.onDrag`
+    /// fires, cleared once the native drag session ends (dropped or
+    /// cancelled). The drag's own visual (the icon following the cursor) is
+    /// entirely AppKit's own native drag image now — see
+    /// `LaunchpadStartMenuView`'s doc comment on why this moved away from a
+    /// hand-tracked "ghost" view.
+    var launchpadDragItemID: String?
+
+    /// Set alongside `launchpadDragItemID` only when the drag started on an
+    /// app *inside* an open folder — lets a drop on the folder's own
+    /// dimmed background (i.e. dragged out past the folder card's edge)
+    /// know which folder to pull it back out of.
+    var launchpadDragSourceFolderID: String?
+
+    /// The live reorder preview while dragging — `nil` means "show the real
+    /// (persisted) order". Mirrors `WindowManager.pendingIconOrder`'s own
+    /// "preview only, commit once at drag end" split for the exact same
+    /// reason: writing to `LaunchpadOrderStore` on every icon the drag
+    /// crosses would be needless churn when only the *final* position
+    /// actually needs to stick.
+    var launchpadPendingOrder: [LaunchpadItem]?
+
+    /// The item currently under the cursor closely enough to create/join a
+    /// folder if dropped now — drives that target's own "about to merge"
+    /// highlight.
+    var launchpadMergeTargetID: String?
+
+    /// The pending page-flip timer while a drag lingers over one of the
+    /// grid's edge hot-zones (see `LaunchpadEdgeDropDelegate`) — plain
+    /// bookkeeping, not view state, so it's excluded from `@Observable`
+    /// tracking. Lives here (not on the drop delegate itself) because that
+    /// delegate is a struct SwiftUI is free to recreate on every drag tick;
+    /// this class instance is what actually persists across those ticks.
+    @ObservationIgnored var launchpadEdgeHoverWorkItem: DispatchWorkItem?
+
+    /// `LaunchpadOrderStore` is a plain, non-`@Observable` UserDefaults
+    /// wrapper (matching `IconOverrideStore`'s own pattern) — bumped after
+    /// every write so `LaunchpadStartMenuView`'s `items` (a computed
+    /// property re-reading the store fresh each time) is known to need
+    /// re-evaluating, the same role `WindowManager.iconOverrideVersion`
+    /// plays for custom icons.
+    private(set) var launchpadOrderVersion = 0
+    func bumpLaunchpadOrderVersion() { launchpadOrderVersion += 1 }
+
     var selectedCategory: String? {
         didSet { selectedIndex = 0 }
     }

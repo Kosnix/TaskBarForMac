@@ -16,6 +16,13 @@
 "icon_edit.done" = "Listo";
 "icon_edit.restore_original" = "Restaurar icono original";
 "icon_edit.change" = "Cambiar icono";
+"menu.rename" = "Cambiar nombre…";
+"icon_edit.restore_original_name" = "Restaurar nombre original";
+"rename.title" = "Cambiar el nombre de «{name}»";
+"rename.message" = "Este nombre solo se aplica dentro de TaskBarForMac.";
+"rename.confirm" = "Cambiar nombre";
+"launchpad.new_folder" = "Nueva carpeta";
+"menu.remove_from_folder" = "Quitar de la carpeta";
 "menu.open_apps" = "Aplicaciones abiertas";
 "menu.liquid_glass" = "Fondo transparente";
 "menu.liquid_glass_intensity" = "Intensidad de la transparencia";
@@ -49,7 +56,17 @@
 "settings.start_menu_style.kickoff" = "Kickoff";
 "settings.start_menu_style.windows11" = "Windows 11";
 "settings.start_menu_style.windows7" = "Windows 7";
+"settings.start_menu_style.launchpad" = "Launchpad";
 "settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_trigger_modifier" = "Tecla de activación";
+"settings.start_menu_trigger.none" = "Ninguna";
+"settings.start_menu_trigger.command" = "Comando";
+"settings.start_menu_trigger.option" = "Opción";
+"settings.start_menu_trigger.control" = "Control";
+"settings.start_menu_trigger.shift" = "Mayús";
+"settings.start_menu_custom_shortcut" = "Atajo personalizado";
+"settings.shortcut.recording" = "Pulsa una tecla…";
+"settings.shortcut.none" = "Ninguno";
 "start.documents" = "Documentos";
 "start.pictures" = "Imágenes";
 "start.music" = "Música";
@@ -80,8 +97,7 @@
 "search.placeholder" = "Buscar una aplicación…";
 
 /* Start menu app grid */
-"alert.unpin.title" = "¿Desanclar «{name}» de la barra de tareas?";
-"alert.unpin.message" = "La aplicación se quitará de la barra de tareas y del Dock.";
+"menu.show_in_finder" = "Mostrar en la carpeta Aplicaciones";
 "app.trash" = "Mover a la papelera";
 "alert.trash_app.title" = "¿Eliminar «{name}»?";
 "alert.trash_app.message" = "La aplicación se moverá a la papelera.";

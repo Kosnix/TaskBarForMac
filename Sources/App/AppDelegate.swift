@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let windowManager = WindowManager()
     private let appDiscovery = AppDiscovery()
     private let startMenuState = StartMenuState()
-    private lazy var shortcutsManager = ShortcutsManager(windowManager: windowManager)
+    private lazy var shortcutsManager = ShortcutsManager(windowManager: windowManager, startMenuState: startMenuState, themeStore: themeStore)
     private let fullscreenObserver = FullscreenObserver()
 
     private var panel: TaskbarPanel?

@@ -28,8 +28,13 @@ struct GroupedTaskButtonView: View {
                     .frame(width: iconSize, height: iconSize)
                     .wiggle(isActive: windowManager.isEditingIcons, seed: bundleIdentifier.hashValue)
                     .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
+                    // A single-window app never reaches this view at all
+                    // (see `WindowManager.groupedEntries`, which only groups
+                    // 2+ windows), so there's always a meaningful count to
+                    // show — same badge style `TaskButtonView` uses for its
+                    // own single-minimized-window case.
+                    .taskWindowCountBadge(.count(windows.count), accentColor: Color(hex: tokens.colors.accent))
             }
-            windowCountBadge
         }
         .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
         // Left-aligned, not the default center: when this button's
@@ -40,26 +45,15 @@ struct GroupedTaskButtonView: View {
         // fixing the start button's own padding could touch, since it was
         // never the start button's gap to begin with.
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
-        // Positioned by hand, pinned to the button's own bottom edge — see
-        // `TaskButtonView`'s identical overlay for why a plain `.overlay`
-        // on the icon isn't enough (the icon can float vertically centered
-        // within a taller button, carrying a naively-attached dot away
-        // from the true bottom edge with it).
-        .overlay(alignment: .bottomLeading) {
-            allMinimizedDot
-                .offset(x: tokens.effectiveTaskbarEdgePadding + iconSize / 2 - Self.minimizedDotSize / 2, y: -Self.minimizedDotBottomInset)
-        }
         .overlay(activeUnderline, alignment: .bottom)
         // No more `.clipShape` — see `TaskButtonView`'s identical removal.
         .contentShape(Rectangle())
-        .help(appName)
+        .help(windowManager.resolvedDisplayName(bundleIdentifier: realBundleIdentifier, fallback: appName))
         .contextMenu {
-            // Unpinning specifically is edit-mode-only (see `TaskButtonView`).
+            // Unpinning works outside edit mode too now.
             if windowManager.isPinned(bundleIdentifier: bundleIdentifier) {
-                if windowManager.isEditingIcons {
-                    Button(L("taskbar.unpin")) {
-                        windowManager.togglePin(pid: windows.first?.pid ?? 0, bundleIdentifier: bundleIdentifier, displayName: appName)
-                    }
+                Button(L("taskbar.unpin")) {
+                    windowManager.togglePin(pid: windows.first?.pid ?? 0, bundleIdentifier: bundleIdentifier, displayName: appName)
                 }
             } else {
                 Button(L("taskbar.pin")) {
@@ -107,32 +101,6 @@ struct GroupedTaskButtonView: View {
             }
         } onHoverChange: { hovering in
             windowManager.setGroupHovered(bundleIdentifier, hovering: hovering)
-        }
-    }
-
-    private var windowCountBadge: some View {
-        Text("\(windows.count)")
-            .font(.system(size: tokens.typography.fontSize - 2, weight: .semibold))
-            .foregroundStyle(Color(hex: tokens.colors.textSecondary))
-    }
-
-    /// Same 0.3 Breeze `Metrics::Blend_Value` hover alpha used by
-    /// `TaskButtonView` — see that file for the source reference.
-    // Neither an active group nor hover get a flat background tint any
-    // more — matching `TaskButtonView`.
-
-    private static let minimizedDotSize: CGFloat = 4
-    private static let minimizedDotBottomInset: CGFloat = 2
-
-    @ViewBuilder
-    private var allMinimizedDot: some View {
-        if !anyActive {
-            // Every window in the group is minimized — same dot convention
-            // as a single minimized window (see `TaskButtonView`), instead
-            // of dimming the whole button.
-            Circle()
-                .fill(Color(hex: tokens.colors.textSecondary))
-                .frame(width: Self.minimizedDotSize, height: Self.minimizedDotSize)
         }
     }
 

@@ -165,6 +165,64 @@ final class WindowManager {
         iconOverrideVersion += 1
     }
 
+    /// Bumped whenever a custom display name is assigned or removed — same
+    /// role `iconOverrideVersion` plays for `IconOverrideStore`.
+    private(set) var displayNameOverrideVersion = 0
+
+    /// The name a task/launcher/grouped button, or any start menu, should
+    /// actually show: a custom override if one's been assigned via
+    /// "Rename", otherwise `fallback` (the app's own real name).
+    func resolvedDisplayName(bundleIdentifier: String?, fallback: String) -> String {
+        _ = displayNameOverrideVersion
+        return AppDisplayNameStore.customName(for: bundleIdentifier) ?? fallback
+    }
+
+    func hasCustomDisplayName(bundleIdentifier: String?) -> Bool {
+        _ = displayNameOverrideVersion
+        return AppDisplayNameStore.customName(for: bundleIdentifier) != nil
+    }
+
+    func restoreOriginalDisplayName(for bundleIdentifier: String?) {
+        guard let bundleIdentifier else { return }
+        AppDisplayNameStore.removeCustomName(for: bundleIdentifier)
+        displayNameOverrideVersion += 1
+    }
+
+    /// A plain `NSAlert` with a text field, same "no SwiftUI sheet
+    /// infrastructure needed for a single one-off prompt" reasoning
+    /// `presentIconPicker` already uses for its own `NSOpenPanel` — this
+    /// only ever changes how *this app* labels something, never the app's
+    /// real name anywhere else (Finder, Spotlight, its own window titles).
+    func promptRename(bundleIdentifier: String?, currentName: String) {
+        guard let bundleIdentifier else { return }
+        let alert = NSAlert()
+        alert.messageText = L("rename.title", ["name": currentName])
+        alert.informativeText = L("rename.message")
+        alert.addButton(withTitle: L("rename.confirm"))
+        alert.addButton(withTitle: L("button.cancel"))
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = currentName
+        field.usesSingleLineMode = true
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        // Same reasoning as `presentIconPicker`: this app runs as an
+        // `.accessory` (no Dock icon, never the "active app"), so a modal
+        // alert doesn't reliably become key/focused without briefly
+        // promoting to `.regular` for its lifetime.
+        let previousPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        defer { NSApp.setActivationPolicy(previousPolicy) }
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let newName = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty else { return }
+        AppDisplayNameStore.setCustomName(newName, for: bundleIdentifier)
+        displayNameOverrideVersion += 1
+    }
+
     /// System UI surfaces (Spotlight's search overlay, etc.) sometimes show
     /// up as a regular, windowed process, but aren't "apps" someone would
     /// want in a taskbar — unless they went out of their way to pin them.
@@ -230,8 +288,15 @@ final class WindowManager {
 
     func refreshPinnedApps() {
         let updated = DockPinnedAppsStore.read()
+        // Only reached when the actual *set* of pinned ids changed (a real
+        // pin/unpin), never on the periodic no-op refresh — safe to always
+        // animate, unlike `refresh()`'s own equivalent guard, which needs
+        // to tell a genuine add/remove apart from routine per-refresh
+        // churn (title/minimized-state changes) itself.
         if updated.map(\.id) != pinnedApps.map(\.id) {
-            pinnedApps = updated
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                pinnedApps = updated
+            }
         }
     }
 
@@ -247,22 +312,15 @@ final class WindowManager {
         refreshPinnedApps()
     }
 
-    /// Asks for confirmation first — unlike pinning, unpinning removes
-    /// something the user (or a previous session) deliberately put there,
-    /// and it's one click away in a context menu with no undo.
+    /// No confirmation dialog — unpinning is one click away in a context
+    /// menu but easily undone (drag the app back onto the bar, or re-pin
+    /// from the start menu), and `NSAlert.runModal()`'s own nested run loop
+    /// was what kept the removal's `withAnimation` (see `refreshPinnedApps`)
+    /// from actually animating: by the time the alert returned and the
+    /// real mutation ran, the transaction context it needed was gone.
     func unpin(url: URL, bundleIdentifier: String?, displayName: String) {
-        guard confirmUnpin(displayName: displayName) else { return }
         DockPinnedAppsStore.unpin(url: url, bundleIdentifier: bundleIdentifier)
         refreshPinnedApps()
-    }
-
-    private func confirmUnpin(displayName: String) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = L("alert.unpin.title", ["name": displayName])
-        alert.informativeText = L("alert.unpin.message")
-        alert.addButton(withTitle: L("taskbar.unpin"))
-        alert.addButton(withTitle: L("button.cancel"))
-        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Convenience for task buttons, which only know a running window's
@@ -570,7 +628,34 @@ final class WindowManager {
             seenIDs.insert(recomputedID)
         }
 
-        windows = collected
+        // Whether this refresh introduces or removes a window for an app
+        // that isn't pinned — the exact "an icon is joining/leaving the
+        // row" cases `TaskbarView`'s `.taskbarAppearance` transition is
+        // for (a pinned app's own icon just changes state in place, so
+        // it's excluded — see that transition's own doc comment).
+        // `.animation(_:value:)` on the taskbar's own view turned out not
+        // to reliably catch a transition driven by a *different* object's
+        // (this one's) state mutation — wrapping the mutation itself in
+        // `withAnimation` here, only when it's actually warranted, is the
+        // reliable way. Not unconditionally, since that would also animate
+        // every incidental refresh (a title update, a minimized flag
+        // flipping) that has nothing to do with an icon appearing/leaving.
+        let previousIDs = Set(windows.map(\.id))
+        let newIDs = Set(collected.map(\.id))
+        let introducesNewUnpinnedWindow = collected.contains { window in
+            !previousIDs.contains(window.id) && !isPinned(bundleIdentifier: window.bundleIdentifier)
+        }
+        let removesUnpinnedWindow = windows.contains { window in
+            !newIDs.contains(window.id) && !isPinned(bundleIdentifier: window.bundleIdentifier)
+        }
+
+        if introducesNewUnpinnedWindow || removesUnpinnedWindow {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                windows = collected
+            }
+        } else {
+            windows = collected
+        }
     }
 
     func raise(_ window: AppWindow) {

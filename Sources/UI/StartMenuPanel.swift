@@ -13,6 +13,7 @@ final class StartMenuPanel: NSPanel {
     private let appDiscovery: AppDiscovery
     private let state: StartMenuState
     private static let resizeHandleSize: CGFloat = 16
+    private weak var resizeHandle: CornerResizeHandleView?
 
     init(
         themeStore: ThemeStore,
@@ -69,6 +70,7 @@ final class StartMenuPanel: NSPanel {
             themeStore.startMenuSizeOverride = newSize
         }
         container.addSubview(handle)
+        resizeHandle = handle
 
         contentView = container
 
@@ -142,6 +144,14 @@ final class StartMenuPanel: NSPanel {
                 liquidGlassIntensity: themeStore.liquidGlassIntensity,
                 onLaunch: onLaunch
             ))
+        case .launchpad:
+            return AnyView(LaunchpadStartMenuView(
+                appDiscovery: appDiscovery,
+                windowManager: windowManager,
+                theme: theme,
+                state: state,
+                onLaunch: onLaunch
+            ))
         }
     }
 
@@ -155,6 +165,9 @@ final class StartMenuPanel: NSPanel {
             return
         }
         (contentView?.subviews.first as? NSHostingView<AnyView>)?.rootView = makeRootView()
+        // Resizing a full-screen menu makes no sense — the handle only
+        // shows for every other, anchored-and-user-sizable style.
+        resizeHandle?.isHidden = themeStore.startMenuStyle == .launchpad
         reposition()
         orderFrontRegardless()
         makeKey()
@@ -179,10 +192,15 @@ final class StartMenuPanel: NSPanel {
     }
 
     private static func frame(themeStore: ThemeStore) -> NSRect {
-        let size = themeStore.effectiveStartMenuSize
         guard let screen = DockController.dockScreen else {
-            return NSRect(origin: .zero, size: size)
+            return NSRect(origin: .zero, size: themeStore.effectiveStartMenuSize)
         }
+        // Launchpad covers the whole screen, like the real thing — not
+        // anchored above the bar or sized/resizable like every other style.
+        if themeStore.startMenuStyle == .launchpad {
+            return screen.frame
+        }
+        let size = themeStore.effectiveStartMenuSize
         let barHeight = themeStore.effectivePanelHeight
         // When the start button itself travels to the middle of the bar
         // ("Centrer avec le menu démarrer"), the menu it opens follows it

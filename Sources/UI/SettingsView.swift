@@ -6,6 +6,15 @@ import SwiftUI
 /// the bar itself is; it's a tool for configuring it).
 struct SettingsView: View {
     @Bindable var themeStore: ThemeStore
+    // Not `@State` — this project's CLT-only build has no compiler-macro
+    // plugins available, which `@State`/`@FocusState` both need (see
+    // `AutoFocusTextField.swift` and others for the same constraint). A
+    // plain stored reference to this already-`@Observable` class works the
+    // same way here: SwiftUI's Observation tracking is per-instance, not
+    // dependent on the property wrapper, as long as this view's own
+    // identity (and so this property) persists for as long as the window
+    // showing it stays open.
+    private let shortcutRecorder = ShortcutRecorder()
 
     private enum Alignment: Hashable {
         case left, center, centerWithStart
@@ -100,6 +109,13 @@ struct SettingsView: View {
     /// instead of showing negative numbers to whoever's dragging it.
     private static let spacingRatioRange: ClosedRange<Double> = -1...0.5
 
+    private var shortcutButtonLabel: String {
+        if shortcutRecorder.isRecording {
+            return L("settings.shortcut.recording")
+        }
+        return themeStore.startMenuCustomShortcut?.displayString ?? L("settings.shortcut.none")
+    }
+
     private var taskbarIconSpacingDisplay: Binding<Double> {
         let range = Self.spacingRatioRange
         let span = range.upperBound - range.lowerBound
@@ -189,10 +205,63 @@ struct SettingsView: View {
                     Text(L("settings.start_menu_style.kickoff")).tag(StartMenuStyle.kickoff)
                     Text(L("settings.start_menu_style.windows11")).tag(StartMenuStyle.windows11)
                     Text(L("settings.start_menu_style.windows7")).tag(StartMenuStyle.windows7)
+                    Text(L("settings.start_menu_style.launchpad")).tag(StartMenuStyle.launchpad)
                     Text(L("settings.start_menu_style.spotlight")).tag(StartMenuStyle.realSpotlight)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
+
+                Picker(L("settings.start_menu_trigger_modifier"), selection: $themeStore.startMenuTriggerModifier) {
+                    ForEach(StartMenuTriggerModifier.allCases) { modifier in
+                        Text(modifier.displayName).tag(modifier)
+                    }
+                }
+
+                HStack {
+                    Text(L("settings.start_menu_custom_shortcut"))
+                    Spacer()
+                    Button {
+                        shortcutRecorder.startRecording()
+                    } label: {
+                        // A plain `Button`'s own title text sat flush
+                        // against the row's trailing edge with nothing to
+                        // set it apart from the label beside it, which read
+                        // as if nothing were actually selected even when it
+                        // was — a bordered "key cap" (macOS's own System
+                        // Settings uses the same look for a recorded
+                        // shortcut) makes the current value unmistakable at
+                        // a glance, recording or not.
+                        Text(shortcutButtonLabel)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(shortcutRecorder.isRecording ? .secondary : .primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.primary.opacity(0.08))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .strokeBorder(Color.primary.opacity(0.2), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(shortcutRecorder.isRecording)
+                    if themeStore.startMenuCustomShortcut != nil {
+                        Button {
+                            themeStore.startMenuCustomShortcut = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .onAppear {
+                    shortcutRecorder.onCapture = { shortcut in
+                        themeStore.startMenuCustomShortcut = shortcut
+                    }
+                }
             }
 
             Section(L("settings.section.clock")) {

@@ -16,6 +16,13 @@
 "icon_edit.done" = "Готово";
 "icon_edit.restore_original" = "Восстановить исходный значок";
 "icon_edit.change" = "Изменить значок";
+"menu.rename" = "Переименовать…";
+"icon_edit.restore_original_name" = "Восстановить исходное имя";
+"rename.title" = "Переименовать «{name}»";
+"rename.message" = "Это имя действует только в TaskBarForMac.";
+"rename.confirm" = "Переименовать";
+"launchpad.new_folder" = "Новая папка";
+"menu.remove_from_folder" = "Убрать из папки";
 "menu.open_apps" = "Открытые приложения";
 "menu.liquid_glass" = "Прозрачный фон";
 "menu.liquid_glass_intensity" = "Интенсивность прозрачности";
@@ -49,7 +56,17 @@
 "settings.start_menu_style.kickoff" = "Kickoff";
 "settings.start_menu_style.windows11" = "Windows 11";
 "settings.start_menu_style.windows7" = "Windows 7";
+"settings.start_menu_style.launchpad" = "Launchpad";
 "settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_trigger_modifier" = "Клавиша запуска";
+"settings.start_menu_trigger.none" = "Нет";
+"settings.start_menu_trigger.command" = "Command";
+"settings.start_menu_trigger.option" = "Option";
+"settings.start_menu_trigger.control" = "Control";
+"settings.start_menu_trigger.shift" = "Shift";
+"settings.start_menu_custom_shortcut" = "Своя комбинация";
+"settings.shortcut.recording" = "Нажмите клавишу…";
+"settings.shortcut.none" = "Нет";
 "start.documents" = "Документы";
 "start.pictures" = "Изображения";
 "start.music" = "Музыка";
@@ -80,8 +97,7 @@
 "search.placeholder" = "Поиск приложения…";
 
 /* Start menu app grid */
-"alert.unpin.title" = "Открепить «{name}» от панели задач?";
-"alert.unpin.message" = "Приложение будет удалено с панели задач и из Dock.";
+"menu.show_in_finder" = "Показать в папке Программы";
 "app.trash" = "Переместить в корзину";
 "alert.trash_app.title" = "Удалить «{name}»?";
 "alert.trash_app.message" = "Приложение будет перемещено в корзину.";

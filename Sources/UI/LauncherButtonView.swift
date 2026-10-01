@@ -19,18 +19,17 @@ struct LauncherButtonView: View {
     private var iconSize: CGFloat { tokens.taskbarIconSize }
 
     var body: some View {
-        // Every action this button's context menu could offer (unpin,
-        // change icon, restore icon) only applies while editing — outside
-        // that mode there's nothing to show, and attaching `.contextMenu`
-        // with an empty builder still pops up a blank menu on right-click
-        // rather than nothing at all. Only attaching the modifier itself
-        // while editing is what actually suppresses the menu entirely for
-        // an app that isn't open.
-        if windowManager.isEditingIcons {
-            content.contextMenu {
-                Button(L("taskbar.unpin")) {
-                    windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
-                }
+        // Unpinning works outside edit mode too now — only the icon-editing
+        // actions stay behind it. The menu is always attached (never
+        // conditionally, the way it used to be) since there's always at
+        // least "Unpin" to show now, sidestepping the empty-builder-still-
+        // shows-a-blank-popup problem that made the old conditional
+        // attachment necessary in the first place.
+        content.contextMenu {
+            Button(L("taskbar.unpin")) {
+                windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
+            }
+            if windowManager.isEditingIcons {
                 Button(L("icon_edit.change")) {
                     windowManager.presentIconPicker(for: app.bundleIdentifier)
                 }
@@ -40,8 +39,6 @@ struct LauncherButtonView: View {
                     }
                 }
             }
-        } else {
-            content
         }
     }
 
@@ -60,14 +57,16 @@ struct LauncherButtonView: View {
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
         // No more `.clipShape` — see `TaskButtonView`'s identical removal.
         .contentShape(Rectangle())
-        .help(app.displayName)
+        .help(windowManager.resolvedDisplayName(bundleIdentifier: app.bundleIdentifier, fallback: app.displayName))
         .taskReorderable(bundleIdentifier: app.bundleIdentifier, windowManager: windowManager) {
             windowManager.launch(app)
         }
         // Last: needs to sit on top of `.taskReorderable`'s own `.onDrop`
         // target to actually receive left-clicks — see
-        // `IconPressGesture.swift`'s doc comment.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch, blocksContextMenuWhenNotEditing: true) { isHovering in
+        // `IconPressGesture.swift`'s doc comment. `blocksContextMenuWhenNotEditing`
+        // dropped — the context menu now always has at least "Unpin" to
+        // show, so a right-click has somewhere to go outside edit mode too.
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch) { isHovering in
             windowManager.hoveredWindowID = isHovering ? "launcher-\(app.id)" : (windowManager.hoveredWindowID == "launcher-\(app.id)" ? nil : windowManager.hoveredWindowID)
         }
     }

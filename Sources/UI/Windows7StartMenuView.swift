@@ -30,7 +30,7 @@ struct Windows7StartMenuView: View {
     private var displayedApps: [InstalledApp] {
         if !state.query.isEmpty {
             return appDiscovery.apps
-                .filter { $0.displayName.localizedCaseInsensitiveContains(state.query) }
+                .filter { displayName(for: $0).localizedCaseInsensitiveContains(state.query) }
         }
         return LaunchHistoryStore.sortedByRecency(appDiscovery.apps, bundleIdentifier: \.bundleIdentifier)
     }
@@ -102,7 +102,7 @@ struct Windows7StartMenuView: View {
                 Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                     .resizable()
                     .frame(width: Self.rowIconSize, height: Self.rowIconSize)
-                Text(app.displayName)
+                Text(displayName(for: app))
                     .font(.system(size: tokens.typography.fontSize))
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -139,11 +139,26 @@ struct Windows7StartMenuView: View {
                     ? windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
                     : windowManager.pin(url: app.url, displayName: app.displayName)
             }
+            Button(L("menu.show_in_finder")) {
+                NSWorkspace.shared.activateFileViewerSelecting([app.url])
+            }
+            Button(L("menu.rename")) {
+                windowManager.promptRename(bundleIdentifier: app.bundleIdentifier, currentName: displayName(for: app))
+            }
+            if windowManager.hasCustomDisplayName(bundleIdentifier: app.bundleIdentifier) {
+                Button(L("icon_edit.restore_original_name")) {
+                    windowManager.restoreOriginalDisplayName(for: app.bundleIdentifier)
+                }
+            }
             Divider()
             Button(L("app.trash")) {
                 appDiscovery.confirmAndUninstall(app)
             }
         }
+    }
+
+    private func displayName(for app: InstalledApp) -> String {
+        windowManager.resolvedDisplayName(bundleIdentifier: app.bundleIdentifier, fallback: app.displayName)
     }
 
     private func launch(_ app: InstalledApp) {
@@ -166,10 +181,25 @@ struct Windows7StartMenuView: View {
             )
             .frame(height: 18)
         }
+        // Without this, the HStack above only ever sizes to fit its own
+        // content (icon + placeholder text) — no amount of padding on the
+        // *outside* can push a edge that was never reaching the column's
+        // true width in the first place. This is what actually makes the
+        // field's background span the row, not just look roughly
+        // full-width by coincidence.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(SearchFieldBackground(tokens: tokens, cornerRadius: 6))
-        .padding(.horizontal, 8)
+        .background(SearchFieldBackground(tokens: tokens, liquidGlassEnabled: liquidGlassEnabled, liquidGlassIntensity: liquidGlassIntensity, cornerRadius: 6))
+        // Left matches the program list's own `.padding(6)` above (see
+        // `leftColumn`). Right is flush (0), not also 6 — the list sits in
+        // a plain `ScrollView` with no outer padding of its own, so its
+        // scrollbar (hidden via `.scrollIndicators(.hidden)`, but still
+        // occupying that edge) tracks the column's true trailing edge, not
+        // the 6pt-inset one the *rows* happen to stop at. Matching the
+        // field's own trailing edge to that same true edge is what lines
+        // the two up.
+        .padding(.leading, 6)
     }
 
     // MARK: - Right column: account + quick links + shut down

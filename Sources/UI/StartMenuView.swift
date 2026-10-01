@@ -124,7 +124,7 @@ struct StartMenuView: View {
             .frame(height: 20)
         }
         .padding(10)
-        .background(SearchFieldBackground(tokens: tokens))
+        .background(SearchFieldBackground(tokens: tokens, liquidGlassEnabled: liquidGlassEnabled, liquidGlassIntensity: liquidGlassIntensity))
         .padding(10)
     }
 
@@ -285,7 +285,7 @@ struct StartMenuView: View {
                 Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                     .resizable()
                     .frame(width: tokens.taskbarIconSize, height: tokens.taskbarIconSize)
-                Text(app.displayName)
+                Text(displayName(for: app))
                     .font(.system(size: tokens.typography.fontSize - 1))
                     .lineLimit(1)
                     .frame(width: 84)
@@ -305,11 +305,26 @@ struct StartMenuView: View {
                     ? windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
                     : windowManager.pin(url: app.url, displayName: app.displayName)
             }
+            Button(L("menu.show_in_finder")) {
+                NSWorkspace.shared.activateFileViewerSelecting([app.url])
+            }
+            Button(L("menu.rename")) {
+                windowManager.promptRename(bundleIdentifier: app.bundleIdentifier, currentName: displayName(for: app))
+            }
+            if windowManager.hasCustomDisplayName(bundleIdentifier: app.bundleIdentifier) {
+                Button(L("icon_edit.restore_original_name")) {
+                    windowManager.restoreOriginalDisplayName(for: app.bundleIdentifier)
+                }
+            }
             Divider()
             Button(L("app.trash")) {
                 appDiscovery.confirmAndUninstall(app)
             }
         }
+    }
+
+    private func displayName(for app: InstalledApp) -> String {
+        windowManager.resolvedDisplayName(bundleIdentifier: app.bundleIdentifier, fallback: app.displayName)
     }
 
     /// Most-recently-launched-through-this-app first (see
@@ -319,7 +334,7 @@ struct StartMenuView: View {
     private var filteredApps: [InstalledApp] {
         let matching = appDiscovery.apps.filter { app in
             let matchesCategory = state.selectedCategory == nil || app.category == state.selectedCategory
-            let matchesQuery = state.query.isEmpty || app.displayName.localizedCaseInsensitiveContains(state.query)
+            let matchesQuery = state.query.isEmpty || displayName(for: app).localizedCaseInsensitiveContains(state.query)
             return matchesCategory && matchesQuery
         }
         return LaunchHistoryStore.sortedByRecency(matching, bundleIdentifier: \.bundleIdentifier)

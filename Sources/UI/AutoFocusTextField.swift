@@ -13,15 +13,35 @@ enum TextFieldNavigation {
 /// overly saturated block instead of a subtle "this theme's" highlight).
 struct SearchFieldBackground: View {
     let tokens: ThemeTokens
+    var liquidGlassEnabled: Bool = false
+    var liquidGlassIntensity: Double = 0.35
     var cornerRadius: CGFloat = 8
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color(hex: tokens.colors.buttonBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Color(hex: tokens.colors.accent).opacity(0.6), lineWidth: 1.5)
-            )
+        Group {
+            if liquidGlassEnabled {
+                // Same glass material/formula as `PanelBackground` and
+                // `GlassButtonBackground` — a flat, fully opaque fill here
+                // (however light) read as a mismatched sticker pasted on
+                // top of the panel's own translucent blur instead of part
+                // of the same glass surface.
+                ZStack {
+                    VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                    Color(hex: tokens.colors.buttonBackgroundHover).opacity(liquidGlassIntensity * 0.85)
+                }
+            } else {
+                // `buttonBackgroundHover`, not the plain `buttonBackground`
+                // — every theme already defines it as a visibly lighter
+                // step up from the base control color, the same "stands
+                // out a bit more" role a search field needs.
+                Color(hex: tokens.colors.buttonBackgroundHover)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(Color(hex: tokens.colors.accent).opacity(0.6), lineWidth: 1.5)
+        )
     }
 }
 
@@ -49,7 +69,25 @@ struct AutoFocusTextField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
-        field.placeholderString = placeholder
+        // Not `placeholderString` — that renders with the system's own
+        // `NSColor.placeholderTextColor`, resolved against whatever
+        // appearance the field *thinks* it's in rather than this theme's
+        // own colors, and reads as barely-there against a dark, translucent
+        // Liquid Glass background. Deriving it from the same `textColor`
+        // every other piece of themed text here already uses (just dimmed)
+        // keeps it legible and consistent instead.
+        // `.font` has to be spelled out here too — an attributed string
+        // with no font of its own falls back to the system default (13pt),
+        // not this field's own `fontSize`, which is what let the
+        // placeholder overflow its fixed-height frame whenever `fontSize`
+        // was smaller than that default.
+        field.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .foregroundColor: textColor.withAlphaComponent(0.55),
+                .font: NSFont.systemFont(ofSize: fontSize)
+            ]
+        )
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
@@ -57,6 +95,20 @@ struct AutoFocusTextField: NSViewRepresentable {
         field.textColor = textColor
         field.stringValue = text.wrappedValue
         field.delegate = context.coordinator
+        // Never actually forced to a single line before — a plain
+        // `NSTextField`'s cell wraps by default, so a placeholder or typed
+        // string too wide for the field's own width (the search field's
+        // fixed height, set by its SwiftUI `.frame`, never grew to match)
+        // wrapped onto a second line and spilled past the pill background
+        // behind it instead of just getting clipped/truncated.
+        // `isScrollable` deliberately left alone — it fights with
+        // `.byTruncatingTail` (a truncated cell isn't meant to be
+        // scrollable too) and set together the field rendered as
+        // completely empty instead of either behavior.
+        field.lineBreakMode = .byTruncatingTail
+        field.maximumNumberOfLines = 1
+        field.cell?.wraps = false
+        field.usesSingleLineMode = true
 
         DispatchQueue.main.async {
             field.window?.makeFirstResponder(field)
