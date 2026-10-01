@@ -90,3 +90,7 @@ A `<name>-light` and `<name>-dark` pair sharing the same prefix automatically be
 ## Disclaimer
 
 A personal hobby project, not a distributed or maintained product. The app isn't notarized by Apple and changes system settings (Dock, permissions). Use at your own judgment.
+
+## License
+
+[MIT](LICENSE)

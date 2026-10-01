@@ -63,7 +63,9 @@ struct LaunchpadStartMenuView: View {
     }
 
     private var searchResults: [InstalledApp] {
-        appDiscovery.apps.filter { $0.displayName.localizedCaseInsensitiveContains(state.query) }
+        appDiscovery.apps.filter {
+            windowManager.matchesSearch(bundleIdentifier: $0.bundleIdentifier, realName: $0.displayName, query: state.query)
+        }
     }
 
     private var pageCount: Int {

@@ -31,7 +31,7 @@ struct Windows11StartMenuView: View {
     private var displayedApps: [InstalledApp] {
         if !state.query.isEmpty {
             return appDiscovery.apps
-                .filter { displayName(for: $0).localizedCaseInsensitiveContains(state.query) }
+                .filter { windowManager.matchesSearch(bundleIdentifier: $0.bundleIdentifier, realName: $0.displayName, query: state.query) }
         }
         return LaunchHistoryStore.sortedByRecency(appDiscovery.apps, bundleIdentifier: \.bundleIdentifier)
     }

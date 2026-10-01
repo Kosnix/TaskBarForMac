@@ -90,3 +90,7 @@ Un thème `<nom>-light` et `<nom>-dark` avec le même préfixe forment automatiq
 ## Avertissement
 
 Projet personnel de bricolage, pas un produit distribué ni maintenu comme tel. L'application n'est pas notariée par Apple et modifie des réglages système (Dock, permissions). À utiliser en connaissance de cause.
+
+## Licence
+
+[MIT](LICENSE)

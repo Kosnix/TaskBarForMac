@@ -182,6 +182,17 @@ final class WindowManager {
         return AppDisplayNameStore.customName(for: bundleIdentifier) != nil
     }
 
+    /// Every start menu's own search matches against this instead of just
+    /// one name or the other — a rename is an *additional* way to find an
+    /// app, not a replacement for searching by its real name, which still
+    /// has to work even after a custom one's been assigned.
+    func matchesSearch(bundleIdentifier: String?, realName: String, query: String) -> Bool {
+        guard !query.isEmpty else { return true }
+        if realName.localizedCaseInsensitiveContains(query) { return true }
+        guard let custom = AppDisplayNameStore.customName(for: bundleIdentifier) else { return false }
+        return custom.localizedCaseInsensitiveContains(query)
+    }
+
     func restoreOriginalDisplayName(for bundleIdentifier: String?) {
         guard let bundleIdentifier else { return }
         AppDisplayNameStore.removeCustomName(for: bundleIdentifier)

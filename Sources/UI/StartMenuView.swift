@@ -334,7 +334,7 @@ struct StartMenuView: View {
     private var filteredApps: [InstalledApp] {
         let matching = appDiscovery.apps.filter { app in
             let matchesCategory = state.selectedCategory == nil || app.category == state.selectedCategory
-            let matchesQuery = state.query.isEmpty || displayName(for: app).localizedCaseInsensitiveContains(state.query)
+            let matchesQuery = windowManager.matchesSearch(bundleIdentifier: app.bundleIdentifier, realName: app.displayName, query: state.query)
             return matchesCategory && matchesQuery
         }
         return LaunchHistoryStore.sortedByRecency(matching, bundleIdentifier: \.bundleIdentifier)
