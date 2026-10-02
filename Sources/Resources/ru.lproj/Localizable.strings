@@ -84,6 +84,8 @@
 "window.restore" = "Восстановить";
 "window.minimize" = "Свернуть";
 "window.close" = "Закрыть";
+"window.close_all" = "Закрыть все";
+"window.force_quit" = "Принудительно завершить";
 "taskbar.pin" = "Закрепить на панели задач";
 "taskbar.unpin" = "Открепить от панели задач";
 
@@ -144,3 +146,20 @@
 "category.navigation" = "Навигация";
 "category.system" = "Система";
 "category.other" = "Другое";
+
+/* Updates */
+"update.section" = "Обновления";
+"update.current_version" = "Текущая версия";
+"update.check" = "Проверить обновления";
+"update.checking" = "Проверка…";
+"update.up_to_date" = "TaskBarForMac обновлён до последней версии.";
+"update.available" = "Доступна версия {version}.";
+"update.notes" = "Что нового";
+"update.install" = "Скачать и установить";
+"update.downloading" = "Загрузка…";
+"update.installing" = "Установка, приложение перезапустится…";
+"update.error.server" = "Не удалось подключиться к GitHub.";
+"update.error.no_asset" = "В этом релизе нет файла для установки.";
+"update.error.not_installed" = "Для автоустановки приложение должно быть установлено (.app).";
+"update.error.not_writable" = "Нет прав на запись в папку приложения.";
+"update.error.invalid_package" = "Загруженный файл повреждён или недействителен.";

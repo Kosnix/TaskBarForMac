@@ -15,6 +15,7 @@ struct SettingsView: View {
     // identity (and so this property) persists for as long as the window
     // showing it stays open.
     private let shortcutRecorder = ShortcutRecorder()
+    private let updateManager = UpdateManager.shared
 
     private enum Alignment: Hashable {
         case left, center, centerWithStart
@@ -289,8 +290,66 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
             }
+
+            Section(L("update.section")) {
+                LabeledContent(L("update.current_version"), value: updateManager.currentVersion)
+                updateStatusRows
+                Button(L("update.check")) {
+                    Task { await updateManager.checkForUpdates() }
+                }
+                .disabled(updateManager.isBusy)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 600)
+    }
+
+    @ViewBuilder
+    private var updateStatusRows: some View {
+        switch updateManager.status {
+        case .idle:
+            EmptyView()
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(L("update.checking"))
+            }
+        case .upToDate:
+            Text(L("update.up_to_date"))
+                .foregroundStyle(.secondary)
+        case .available(let version, let notes):
+            Text(L("update.available", ["version": version]))
+                .fontWeight(.medium)
+            if !notes.isEmpty {
+                DisclosureGroup(L("update.notes")) {
+                    ScrollView {
+                        Text(notes)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 140)
+                }
+            }
+            Button(L("update.install")) {
+                Task { await updateManager.installAvailableUpdate() }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!updateManager.canInstallInPlace)
+        case .downloading(let progress):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("update.downloading"))
+                ProgressView(value: progress)
+            }
+        case .installing:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(L("update.installing"))
+            }
+        case .failed(let message):
+            Text(message)
+                .foregroundStyle(.red)
+        }
     }
 }

@@ -84,6 +84,8 @@
 "window.restore" = "Restore";
 "window.minimize" = "Minimize";
 "window.close" = "Close";
+"window.close_all" = "Close All";
+"window.force_quit" = "Force Quit";
 "taskbar.pin" = "Pin to Taskbar";
 "taskbar.unpin" = "Unpin from Taskbar";
 
@@ -144,3 +146,20 @@
 "category.navigation" = "Navigation";
 "category.system" = "System";
 "category.other" = "Other";
+
+/* Updates */
+"update.section" = "Updates";
+"update.current_version" = "Current version";
+"update.check" = "Check for Updates";
+"update.checking" = "Checking…";
+"update.up_to_date" = "TaskBarForMac is up to date.";
+"update.available" = "Version {version} is available.";
+"update.notes" = "What’s new";
+"update.install" = "Download and Install";
+"update.downloading" = "Downloading…";
+"update.installing" = "Installing, the app will restart…";
+"update.error.server" = "Couldn’t reach GitHub.";
+"update.error.no_asset" = "This release has no installable file.";
+"update.error.not_installed" = "Automatic install needs the app to be installed (.app).";
+"update.error.not_writable" = "Can’t write to the app’s folder (insufficient permissions).";
+"update.error.invalid_package" = "The downloaded file is invalid or corrupted.";

@@ -70,6 +70,22 @@ struct GroupedTaskButtonView: View {
                     }
                 }
             }
+            if !windowManager.isEditingIcons {
+                Divider()
+                Button(L("window.close_all")) {
+                    windowManager.closeAll(bundleIdentifier: bundleIdentifier, windows: windows)
+                }
+                // Only once a previous "Close All" didn't actually get rid
+                // of every window after a short grace period — see
+                // `WindowManager.scheduleStuckCloseCheck` — so this isn't
+                // sitting there as a tempting shortcut past an app's own
+                // "Save changes?" prompt on the very first try.
+                if windowManager.isCloseStuck(bundleIdentifier: realBundleIdentifier, pid: windows.first?.pid ?? 0) {
+                    Button(L("window.force_quit")) {
+                        windowManager.forceQuit(bundleIdentifier: realBundleIdentifier, pid: windows.first?.pid ?? 0)
+                    }
+                }
+            }
         }
         .taskReorderable(bundleIdentifier: realBundleIdentifier, windowManager: windowManager) {
             if let first = windows.first {

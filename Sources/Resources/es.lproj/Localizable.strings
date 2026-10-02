@@ -84,6 +84,8 @@
 "window.restore" = "Restaurar";
 "window.minimize" = "Minimizar";
 "window.close" = "Cerrar";
+"window.close_all" = "Cerrar todo";
+"window.force_quit" = "Forzar cierre";
 "taskbar.pin" = "Anclar a la barra de tareas";
 "taskbar.unpin" = "Desanclar de la barra de tareas";
 
@@ -144,3 +146,20 @@
 "category.navigation" = "Navegación";
 "category.system" = "Sistema";
 "category.other" = "Otra";
+
+/* Updates */
+"update.section" = "Actualizaciones";
+"update.current_version" = "Versión actual";
+"update.check" = "Buscar actualizaciones";
+"update.checking" = "Buscando…";
+"update.up_to_date" = "TaskBarForMac está actualizado.";
+"update.available" = "La versión {version} está disponible.";
+"update.notes" = "Novedades";
+"update.install" = "Descargar e instalar";
+"update.downloading" = "Descargando…";
+"update.installing" = "Instalando, la app se reiniciará…";
+"update.error.server" = "No se pudo conectar con GitHub.";
+"update.error.no_asset" = "Esta versión no incluye archivo de instalación.";
+"update.error.not_installed" = "La instalación automática requiere la app instalada (.app).";
+"update.error.not_writable" = "No se puede escribir en la carpeta de la app (permisos insuficientes).";
+"update.error.invalid_package" = "El archivo descargado no es válido o está dañado.";

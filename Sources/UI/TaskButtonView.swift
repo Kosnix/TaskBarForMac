@@ -72,6 +72,14 @@ struct TaskButtonView: View {
                 Button(L("window.close")) {
                     windowManager.close(window)
                 }
+                // Only once a previous close didn't actually get rid of
+                // this window after a short grace period — see
+                // `WindowManager.scheduleStuckCloseCheck`.
+                if windowManager.isCloseStuck(bundleIdentifier: window.bundleIdentifier, pid: window.pid) {
+                    Button(L("window.force_quit")) {
+                        windowManager.forceQuit(bundleIdentifier: window.bundleIdentifier, pid: window.pid)
+                    }
+                }
                 Divider()
             }
             // Unpinning works outside edit mode too now.

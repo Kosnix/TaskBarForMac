@@ -667,6 +667,15 @@ final class WindowManager {
         } else {
             windows = collected
         }
+
+        // An app that was flagged "stuck" (see `closeAll`/`close`'s own
+        // stuck-check) but no longer has any window at all has since quit
+        // on its own — nothing left to force-quit, so the taskbar's
+        // context menu shouldn't keep offering to.
+        if !stuckCloseAttempts.isEmpty {
+            let stillPresent = Set(collected.map { $0.bundleIdentifier ?? "pid-\($0.pid)" })
+            stuckCloseAttempts.formIntersection(stillPresent)
+        }
     }
 
     func raise(_ window: AppWindow) {
@@ -719,13 +728,70 @@ final class WindowManager {
     }
 
     /// Closes a window via its AX close button (the same element the red
-    /// traffic-light button performs), rather than quitting the app.
+    /// traffic-light button performs), rather than quitting the app. A
+    /// soft request, same as clicking that button yourself: an app with
+    /// unsaved changes can still show its own "Save?" dialog and ignore
+    /// this entirely, which is exactly the case `scheduleStuckCloseCheck`
+    /// exists to catch.
     func close(_ window: AppWindow) {
+        let key = window.bundleIdentifier ?? "pid-\(window.pid)"
         var closeButton: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(window.axElement, kAXCloseButtonAttribute as CFString, &closeButton)
         if result == .success, let closeButton {
             AXUIElementPerformAction((closeButton as! AXUIElement), kAXPressAction as CFString)
         }
+        refresh()
+        scheduleStuckCloseCheck(key: key, pid: window.pid)
+    }
+
+    /// "Close All" on a grouped task button — the same soft, one-at-a-time
+    /// AX close request `close(_:)` sends for a single window, just for
+    /// every window that app currently has open.
+    func closeAll(bundleIdentifier: String, windows: [AppWindow]) {
+        for window in windows {
+            var closeButton: CFTypeRef?
+            let result = AXUIElementCopyAttributeValue(window.axElement, kAXCloseButtonAttribute as CFString, &closeButton)
+            if result == .success, let closeButton {
+                AXUIElementPerformAction((closeButton as! AXUIElement), kAXPressAction as CFString)
+            }
+        }
+        refresh()
+        guard let pid = windows.first?.pid else { return }
+        scheduleStuckCloseCheck(key: bundleIdentifier, pid: pid)
+    }
+
+    /// Bundle identifiers (or synthetic `pid-…` keys, matching
+    /// `groupedEntries`'s own) whose close was already requested and
+    /// didn't actually get rid of every window within the grace period
+    /// below — the taskbar's context menu offers "Force Quit" for these,
+    /// instead of leaving someone to just keep clicking "Close" against an
+    /// app that isn't responding to it. Cleared once the app genuinely has
+    /// no windows left (see `refresh()`) or is force-quit.
+    private(set) var stuckCloseAttempts: Set<String> = []
+
+    private static let stuckCloseGracePeriod: TimeInterval = 1.5
+
+    private func scheduleStuckCloseCheck(key: String, pid: pid_t) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.stuckCloseGracePeriod) { [weak self] in
+            guard let self else { return }
+            let stillHasWindow = self.windows.contains { ($0.bundleIdentifier ?? "pid-\($0.pid)") == key }
+            if stillHasWindow {
+                self.stuckCloseAttempts.insert(key)
+            }
+        }
+    }
+
+    func isCloseStuck(bundleIdentifier: String?, pid: pid_t) -> Bool {
+        let key = bundleIdentifier ?? "pid-\(pid)"
+        return stuckCloseAttempts.contains(key)
+    }
+
+    /// Kills the process outright (`SIGKILL` via `NSRunningApplication`,
+    /// not the graceful AX close every other action here uses) — only ever
+    /// offered once a normal close has already been tried and didn't work.
+    func forceQuit(bundleIdentifier: String?, pid: pid_t) {
+        NSRunningApplication(processIdentifier: pid)?.forceTerminate()
+        stuckCloseAttempts.remove(bundleIdentifier ?? "pid-\(pid)")
         refresh()
     }
 

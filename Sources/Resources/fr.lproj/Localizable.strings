@@ -84,6 +84,8 @@
 "window.restore" = "Restaurer";
 "window.minimize" = "Réduire";
 "window.close" = "Fermer";
+"window.close_all" = "Tout fermer";
+"window.force_quit" = "Forcer à quitter";
 "taskbar.pin" = "Épingler à la barre des tâches";
 "taskbar.unpin" = "Détacher de la barre des tâches";
 
@@ -144,3 +146,20 @@
 "category.navigation" = "Navigation";
 "category.system" = "Système";
 "category.other" = "Autre";
+
+/* Updates */
+"update.section" = "Mises à jour";
+"update.current_version" = "Version actuelle";
+"update.check" = "Rechercher des mises à jour";
+"update.checking" = "Recherche en cours…";
+"update.up_to_date" = "TaskBarForMac est à jour.";
+"update.available" = "La version {version} est disponible.";
+"update.notes" = "Nouveautés";
+"update.install" = "Télécharger et installer";
+"update.downloading" = "Téléchargement…";
+"update.installing" = "Installation, l’app va redémarrer…";
+"update.error.server" = "Impossible de joindre GitHub.";
+"update.error.no_asset" = "Aucun fichier d’installation dans cette version.";
+"update.error.not_installed" = "L’installation automatique nécessite l’app installée (.app).";
+"update.error.not_writable" = "Impossible d’écrire dans le dossier de l’app (droits insuffisants).";
+"update.error.invalid_package" = "Le fichier téléchargé est invalide ou corrompu.";
