@@ -32,7 +32,6 @@ final class LaunchpadCellView: NSView, NSDraggingSource {
     var itemID: String?
     var onTap: (() -> Void)?
     var onLongPress: (() -> Void)?
-    var onHoverChange: ((Bool) -> Void)?
 
     /// Read once, right as a drag begins, for the image AppKit shows
     /// following the cursor for the rest of the session.
@@ -58,7 +57,6 @@ final class LaunchpadCellView: NSView, NSDraggingSource {
     var onDropExit: (() -> Void)?
     var onPerformDrop: ((CGPoint, CGSize) -> Void)?
 
-    private var trackingArea: NSTrackingArea?
     private var pendingLongPress: DispatchWorkItem?
     private var startLocation: NSPoint = .zero
     private var isDraggingSelf = false
@@ -77,17 +75,6 @@ final class LaunchpadCellView: NSView, NSDraggingSource {
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseEnteredAndExited], owner: self)
-        addTrackingArea(area)
-        trackingArea = area
-    }
-
-    override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }
-    override func mouseExited(with event: NSEvent) { onHoverChange?(false) }
 
     override func mouseDown(with event: NSEvent) {
         startLocation = event.locationInWindow
@@ -185,7 +172,6 @@ private struct LaunchpadCellRepresentable: NSViewRepresentable {
     let onDropUpdate: (CGPoint, CGSize) -> Void
     let onDropExit: () -> Void
     let onPerformDrop: (CGPoint, CGSize) -> Void
-    let onHoverChange: (Bool) -> Void
 
     func makeNSView(context: Context) -> LaunchpadCellView {
         let view = LaunchpadCellView()
@@ -207,7 +193,6 @@ private struct LaunchpadCellRepresentable: NSViewRepresentable {
         view.onDropUpdate = onDropUpdate
         view.onDropExit = onDropExit
         view.onPerformDrop = onPerformDrop
-        view.onHoverChange = onHoverChange
     }
 }
 
@@ -224,8 +209,7 @@ extension View {
         onDragEnded: @escaping () -> Void,
         onDropUpdate: @escaping (CGPoint, CGSize) -> Void = { _, _ in },
         onDropExit: @escaping () -> Void = {},
-        onPerformDrop: @escaping (CGPoint, CGSize) -> Void = { _, _ in },
-        onHoverChange: @escaping (Bool) -> Void = { _ in }
+        onPerformDrop: @escaping (CGPoint, CGSize) -> Void = { _, _ in }
     ) -> some View {
         overlay(
             LaunchpadCellRepresentable(
@@ -237,8 +221,7 @@ extension View {
                 onDragEnded: onDragEnded,
                 onDropUpdate: onDropUpdate,
                 onDropExit: onDropExit,
-                onPerformDrop: onPerformDrop,
-                onHoverChange: onHoverChange
+                onPerformDrop: onPerformDrop
             )
         )
     }

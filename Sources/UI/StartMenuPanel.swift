@@ -110,9 +110,9 @@ final class StartMenuPanel: NSPanel {
         let onLaunch: () -> Void = { [weak state] in state?.isPresented = false }
 
         switch themeStore.startMenuStyle {
-        case .kickoff, .realSpotlight:
-            // `.realSpotlight` never actually presents this panel (see
-            // `StartMenuState.toggleOrOpenSpotlight`) — falling back to the
+        case .kickoff, .realSpotlight, .nativeApps:
+            // `.realSpotlight`/`.nativeApps` never actually present this panel (see
+            // `StartMenuState.toggleOrHandOff`) — falling back to the
             // default layout here is just so this switch stays exhaustive,
             // not something that's ever visibly reachable.
             return AnyView(StartMenuView(
@@ -122,6 +122,7 @@ final class StartMenuPanel: NSPanel {
                 state: state,
                 liquidGlassEnabled: themeStore.liquidGlassEnabled,
                 liquidGlassIntensity: themeStore.liquidGlassIntensity,
+                infiniteScroll: themeStore.infiniteScrollEnabled,
                 onLaunch: onLaunch
             ))
         case .windows11:
@@ -132,6 +133,7 @@ final class StartMenuPanel: NSPanel {
                 state: state,
                 liquidGlassEnabled: themeStore.liquidGlassEnabled,
                 liquidGlassIntensity: themeStore.liquidGlassIntensity,
+                infiniteScroll: themeStore.infiniteScrollEnabled,
                 onLaunch: onLaunch
             ))
         case .windows7:
@@ -142,6 +144,7 @@ final class StartMenuPanel: NSPanel {
                 state: state,
                 liquidGlassEnabled: themeStore.liquidGlassEnabled,
                 liquidGlassIntensity: themeStore.liquidGlassIntensity,
+                infiniteScroll: themeStore.infiniteScrollEnabled,
                 onLaunch: onLaunch
             ))
         case .launchpad:
@@ -164,6 +167,9 @@ final class StartMenuPanel: NSPanel {
             orderOut(nil)
             return
         }
+        // Whatever was uninstalled or trashed since the last directory
+        // event (or from somewhere nothing watches) shouldn't be offered.
+        appDiscovery.pruneMissingApps()
         (contentView?.subviews.first as? NSHostingView<AnyView>)?.rootView = makeRootView()
         // Resizing a full-screen menu makes no sense — the handle only
         // shows for every other, anchored-and-user-sizable style.

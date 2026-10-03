@@ -26,7 +26,7 @@ struct SearchFieldBackground: View {
                 // top of the panel's own translucent blur instead of part
                 // of the same glass surface.
                 ZStack {
-                    VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                    VisualEffectView(material: .sidebar, blendingMode: .behindWindow, appearance: tokens.materialAppearance)
                     Color(hex: tokens.colors.buttonBackgroundHover).opacity(liquidGlassIntensity * 0.85)
                 }
             } else {
@@ -53,8 +53,7 @@ struct SearchFieldBackground: View {
 /// own `TextField` + `@FocusState`: `@FocusState` needs the same Xcode-only
 /// compiler-macro plugin `@State` does (see `ShortcutsManager`), which this
 /// project avoids so it stays buildable with plain `swift build`.
-struct AutoFocusTextField: NSViewRepresentable {
-    var placeholder: String
+struct AutoFocusNSTextField: NSViewRepresentable {
     var text: Binding<String>
     var textColor: NSColor = .labelColor
     /// The blinking cursor and text-selection highlight otherwise default to
@@ -69,25 +68,7 @@ struct AutoFocusTextField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
-        // Not `placeholderString` — that renders with the system's own
-        // `NSColor.placeholderTextColor`, resolved against whatever
-        // appearance the field *thinks* it's in rather than this theme's
-        // own colors, and reads as barely-there against a dark, translucent
-        // Liquid Glass background. Deriving it from the same `textColor`
-        // every other piece of themed text here already uses (just dimmed)
-        // keeps it legible and consistent instead.
-        // `.font` has to be spelled out here too — an attributed string
-        // with no font of its own falls back to the system default (13pt),
-        // not this field's own `fontSize`, which is what let the
-        // placeholder overflow its fixed-height frame whenever `fontSize`
-        // was smaller than that default.
-        field.placeholderAttributedString = NSAttributedString(
-            string: placeholder,
-            attributes: [
-                .foregroundColor: textColor.withAlphaComponent(0.55),
-                .font: NSFont.systemFont(ofSize: fontSize)
-            ]
-        )
+        field.appearance = Self.appearance(matching: textColor)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
@@ -117,7 +98,23 @@ struct AutoFocusTextField: NSViewRepresentable {
         return field
     }
 
+    /// Pins the field to a light or dark appearance chosen from the *text
+    /// color* it's been given, instead of following the system's. AppKit
+    /// still resolves some of a field's own colors (the empty-state
+    /// placeholder above all) against its effective appearance regardless
+    /// of the explicit colors set on it, so with a dark theme under a
+    /// light-mode macOS the placeholder came out dark grey on the dark
+    /// translucent search pill — unreadable. Light text means a dark
+    /// theme and vice versa, the same rule `ThemeTokens.materialAppearance`
+    /// applies to the glass behind it.
+    private static func appearance(matching textColor: NSColor) -> NSAppearance? {
+        guard let rgb = textColor.usingColorSpace(.sRGB) else { return nil }
+        let luminance = 0.2126 * rgb.redComponent + 0.7152 * rgb.greenComponent + 0.0722 * rgb.blueComponent
+        return NSAppearance(named: luminance > 0.5 ? .darkAqua : .aqua)
+    }
+
     func updateNSView(_ nsView: NSTextField, context: Context) {
+        nsView.appearance = Self.appearance(matching: textColor)
         if nsView.stringValue != text.wrappedValue {
             nsView.stringValue = text.wrappedValue
         }
@@ -184,6 +181,45 @@ struct AutoFocusTextField: NSViewRepresentable {
                 return true
             default:
                 return false
+            }
+        }
+    }
+}
+
+/// What every start menu actually uses. The placeholder is drawn here, in
+/// SwiftUI, rather than by the `NSTextField` itself: AppKit's own
+/// placeholder rendering resolved to a dark grey on the dark glass pill on
+/// real screens (reported on the Windows 11 and Kickoff menus) even though
+/// explicit colors were set on it, and a plain SwiftUI `Text` takes exactly
+/// the color it's given.
+struct AutoFocusTextField: View {
+    var placeholder: String
+    var text: Binding<String>
+    var textColor: NSColor = .labelColor
+    var accentColor: NSColor = .controlAccentColor
+    var fontSize: CGFloat = 13
+    var onNavigate: ((TextFieldNavigation) -> Void)?
+    var onSubmit: (() -> Void)?
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            AutoFocusNSTextField(
+                text: text,
+                textColor: textColor,
+                accentColor: accentColor,
+                fontSize: fontSize,
+                onNavigate: onNavigate,
+                onSubmit: onSubmit
+            )
+            if text.wrappedValue.isEmpty {
+                Text(placeholder)
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(Color(nsColor: textColor).opacity(0.6))
+                    .lineLimit(1)
+                    .allowsHitTesting(false)
+                    // The field's own text starts a few points in from its
+                    // edge; lines the placeholder up with it.
+                    .padding(.leading, 2)
             }
         }
     }

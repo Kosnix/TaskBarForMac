@@ -1,6 +1,5 @@
 /* General */
 "app.no_theme" = "No theme available";
-"button.apply" = "Apply";
 "button.cancel" = "Cancel";
 
 /* Personalization menu */
@@ -58,6 +57,7 @@
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.launchpad" = "Launchpad";
 "settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_style.native_apps" = "Apps (macOS)";
 "settings.start_menu_trigger_modifier" = "Trigger Key";
 "settings.start_menu_trigger.none" = "None";
 "settings.start_menu_trigger.command" = "Command";
@@ -163,3 +163,4 @@
 "update.error.not_installed" = "Automatic install needs the app to be installed (.app).";
 "update.error.not_writable" = "Can’t write to the app’s folder (insufficient permissions).";
 "update.error.invalid_package" = "The downloaded file is invalid or corrupted.";
+"settings.infinite_scroll" = "Infinite list scrolling";

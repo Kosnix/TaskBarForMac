@@ -113,18 +113,14 @@ struct LaunchpadStartMenuView: View {
                         // a hard edge floating over the blurred desktop,
                         // instead of entering from genuinely off-screen the
                         // way real Launchpad/iOS do.
+                        // Only here, never over `searchGrid`: the pager is
+                        // an overlay that claims vertical wheel events, which
+                        // would stop the search results from scrolling.
                         pagedGrid
+                            .launchpadScrollPager(onPageChange: flipPage)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // Attached to the full available area, not just the grid's
-                // own tight (content-sized) bounds — a page with fewer than
-                // a full page of icons still leaves blank rows below the
-                // last one, and scrolling there should still flip pages.
-                .launchpadScrollPager { edge in
-                    guard !isSearching else { return }
-                    flipPage(edge)
-                }
                 if !isSearching && pageCount > 1 {
                     pageDots
                 }
@@ -418,7 +414,6 @@ struct LaunchpadStartMenuView: View {
             dragImageProvider: { windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon },
             onDragWillBegin: {
                 state.launchpadDragItemID = app.id
-                state.launchpadDragSourceFolderID = nil
             },
             onDragEnded: resetDragState,
             onDropUpdate: { point, size in updateDropTarget(targetID: app.id, point: point, size: size) },
@@ -457,7 +452,6 @@ struct LaunchpadStartMenuView: View {
             dragImageProvider: { Self.renderedImage(of: folderIcon(appIDs: appIDs), size: NSSize(width: Self.iconSize, height: Self.iconSize)) },
             onDragWillBegin: {
                 state.launchpadDragItemID = id
-                state.launchpadDragSourceFolderID = nil
             },
             onDragEnded: resetDragState,
             onDropUpdate: { point, size in updateDropTarget(targetID: id, point: point, size: size) },
@@ -609,7 +603,6 @@ struct LaunchpadStartMenuView: View {
             dragImageProvider: { windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon },
             onDragWillBegin: {
                 state.launchpadDragItemID = app.id
-                state.launchpadDragSourceFolderID = folderID
                 // Pre-seed the preview with the app already pulled out
                 // (appended at the very end, same as a plain drop with no
                 // specific target) — `updateDropTarget`/`performDrop` for
@@ -746,7 +739,6 @@ struct LaunchpadStartMenuView: View {
 
     private func resetDragState() {
         state.launchpadDragItemID = nil
-        state.launchpadDragSourceFolderID = nil
         state.launchpadPendingOrder = nil
         state.launchpadMergeTargetID = nil
     }

@@ -1,6 +1,5 @@
 /* General */
 "app.no_theme" = "No hay ningún tema disponible";
-"button.apply" = "Aplicar";
 "button.cancel" = "Cancelar";
 
 /* Personalization menu */
@@ -58,6 +57,7 @@
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.launchpad" = "Launchpad";
 "settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_style.native_apps" = "Apps (macOS)";
 "settings.start_menu_trigger_modifier" = "Tecla de activación";
 "settings.start_menu_trigger.none" = "Ninguna";
 "settings.start_menu_trigger.command" = "Comando";
@@ -163,3 +163,4 @@
 "update.error.not_installed" = "La instalación automática requiere la app instalada (.app).";
 "update.error.not_writable" = "No se puede escribir en la carpeta de la app (permisos insuficientes).";
 "update.error.invalid_package" = "El archivo descargado no es válido o está dañado.";
+"settings.infinite_scroll" = "Desplazamiento infinito de listas";

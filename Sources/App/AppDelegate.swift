@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             permissions: permissions,
             startMenuState: startMenuState,
             onMinimizeAll: { [weak windowManager] in
-                windowManager?.minimizeAll()
+                windowManager?.toggleMinimizeAll()
             }
         )
         panel.showAtDockPosition()
@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         shortcutsManager.start { [weak startMenuState, weak themeStore] in
             guard let style = themeStore?.startMenuStyle else { return }
-            startMenuState?.toggleOrOpenSpotlight(style: style)
+            startMenuState?.toggleOrHandOff(style: style)
         }
 
         fullscreenObserver.start { [weak self] isFullscreen in

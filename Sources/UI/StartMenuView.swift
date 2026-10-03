@@ -19,6 +19,7 @@ struct StartMenuView: View {
     let state: StartMenuState
     let liquidGlassEnabled: Bool
     let liquidGlassIntensity: Double
+    let infiniteScroll: Bool
     let onLaunch: () -> Void
 
     private var tokens: ThemeTokens { theme.tokens }
@@ -250,24 +251,33 @@ struct StartMenuView: View {
         .buttonStyle(.plain)
     }
 
+    private var loopsEnabled: Bool {
+        LoopList.shouldLoop(enabled: infiniteScroll, searching: !state.query.isEmpty, count: filteredApps.count, columns: Self.columnCount, visibleRows: 5)
+    }
+
     private var appGrid: some View {
         ScrollViewReader { proxy in
-            ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: filteredApps.map(\.id)) {
+            ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: filteredApps.map(\.id), state: state, loops: loopsEnabled) {
                 LazyVGrid(columns: gridColumns, spacing: 12) {
-                    ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
-                        appCell(app, isSelected: index == state.selectedIndex && state.focusedRegion == .grid) {
-                            state.focusedRegion = .grid
-                            state.selectedIndex = index
+                    ForEach(LoopList.entries(filteredApps, columns: Self.columnCount, loops: loopsEnabled)) { entry in
+                        if let app = entry.item {
+                            appCell(app, isSelected: entry.slot == state.selectedIndex && state.focusedRegion == .grid) {
+                                state.focusedRegion = .grid
+                                state.selectedIndex = entry.slot
+                            }
+                            .id(entry.id)
+                        } else {
+                            Color.clear.frame(height: 1).id(entry.id)
                         }
-                        .id(app.id)
                     }
                 }
+                .scrollTargetLayout()
                 .padding(gridPadding)
             }
             .onChange(of: state.selectedIndex) { _, newIndex in
                 guard state.focusedRegion == .grid, filteredApps.indices.contains(newIndex) else { return }
                 withAnimation(.easeOut(duration: 0.12)) {
-                    proxy.scrollTo(filteredApps[newIndex].id, anchor: .center)
+                    proxy.scrollTo(LoopList.id(copy: LoopList.middleCopy, slot: newIndex), anchor: .center)
                 }
             }
         }

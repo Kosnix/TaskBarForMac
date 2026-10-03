@@ -208,9 +208,13 @@ struct SettingsView: View {
                     Text(L("settings.start_menu_style.windows7")).tag(StartMenuStyle.windows7)
                     Text(L("settings.start_menu_style.launchpad")).tag(StartMenuStyle.launchpad)
                     Text(L("settings.start_menu_style.spotlight")).tag(StartMenuStyle.realSpotlight)
+                    if NativeAppsTrigger.isAvailable {
+                        Text(L("settings.start_menu_style.native_apps")).tag(StartMenuStyle.nativeApps)
+                    }
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
+
+                Toggle(L("settings.infinite_scroll"), isOn: $themeStore.infiniteScrollEnabled)
 
                 Picker(L("settings.start_menu_trigger_modifier"), selection: $themeStore.startMenuTriggerModifier) {
                     ForEach(StartMenuTriggerModifier.allCases) { modifier in
@@ -301,6 +305,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollIndicators(.never)
         .frame(width: 460, height: 600)
     }
 
@@ -329,6 +334,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                     }
+                    .scrollIndicators(.never)
                     .frame(maxHeight: 140)
                 }
             }

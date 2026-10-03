@@ -1,6 +1,5 @@
 /* General */
 "app.no_theme" = "Aucun thème disponible";
-"button.apply" = "Appliquer";
 "button.cancel" = "Annuler";
 
 /* Personalization menu */
@@ -58,6 +57,7 @@
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.launchpad" = "Launchpad";
 "settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_style.native_apps" = "Apps (macOS)";
 "settings.start_menu_trigger_modifier" = "Touche de déclenchement";
 "settings.start_menu_trigger.none" = "Aucune";
 "settings.start_menu_trigger.command" = "Commande";
@@ -163,3 +163,4 @@
 "update.error.not_installed" = "L’installation automatique nécessite l’app installée (.app).";
 "update.error.not_writable" = "Impossible d’écrire dans le dossier de l’app (droits insuffisants).";
 "update.error.invalid_package" = "Le fichier téléchargé est invalide ou corrompu.";
+"settings.infinite_scroll" = "Défilement infini des listes";

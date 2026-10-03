@@ -24,9 +24,9 @@ final class StartMenuState {
                 isEditingLaunchpad = false
                 openLaunchpadFolderID = nil
                 launchpadDragItemID = nil
-                launchpadDragSourceFolderID = nil
                 launchpadPendingOrder = nil
                 launchpadMergeTargetID = nil
+                loopScrollTopID = nil
             }
             onPresentationChange?(isPresented)
         }
@@ -62,15 +62,15 @@ final class StartMenuState {
 
     /// What both the start button's tap and the global keyboard shortcut
     /// actually call, instead of toggling `isPresented` directly —
-    /// `.realSpotlight` doesn't draw any menu of its own at all, it just
-    /// hands off to the real system Spotlight and leaves this app's own
-    /// panel closed.
-    func toggleOrOpenSpotlight(style: StartMenuStyle) {
-        if style == .realSpotlight {
-            SpotlightTrigger.open()
-            return
+    /// `.realSpotlight` and `.nativeApps` don't draw any menu of their own,
+    /// they hand off to the real system Spotlight / Apps menu and leave
+    /// this app's own panel closed.
+    func toggleOrHandOff(style: StartMenuStyle) {
+        switch style {
+        case .realSpotlight: SpotlightTrigger.open()
+        case .nativeApps: NativeAppsTrigger.toggle()
+        default: isPresented.toggle()
         }
-        isPresented.toggle()
     }
 
     var query = "" {
@@ -105,12 +105,6 @@ final class StartMenuState {
     /// hand-tracked "ghost" view.
     var launchpadDragItemID: String?
 
-    /// Set alongside `launchpadDragItemID` only when the drag started on an
-    /// app *inside* an open folder — lets a drop on the folder's own
-    /// dimmed background (i.e. dragged out past the folder card's edge)
-    /// know which folder to pull it back out of.
-    var launchpadDragSourceFolderID: String?
-
     /// The live reorder preview while dragging — `nil` means "show the real
     /// (persisted) order". Mirrors `WindowManager.pendingIconOrder`'s own
     /// "preview only, commit once at drag end" split for the exact same
@@ -123,6 +117,12 @@ final class StartMenuState {
     /// folder if dropped now — drives that target's own "about to merge"
     /// highlight.
     var launchpadMergeTargetID: String?
+
+    /// The top-most visible cell of whichever start-menu list is in
+    /// infinite-scroll mode (see `ThemedScrollView`) — plain bookkeeping
+    /// that changes on every scroll tick, so deliberately excluded from
+    /// `@Observable` tracking.
+    @ObservationIgnored var loopScrollTopID: String?
 
     /// The pending page-flip timer while a drag lingers over one of the
     /// grid's edge hot-zones (see `LaunchpadEdgeDropDelegate`) — plain

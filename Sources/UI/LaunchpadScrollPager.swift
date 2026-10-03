@@ -36,6 +36,13 @@ private final class ScrollPagerView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let event = NSApp.currentEvent, event.type == .scrollWheel else { return nil }
+        // Only a wheel's discrete ticks (no gesture phases). A trackpad or
+        // Magic Mouse swipe always carries phases and must stay with the
+        // ScrollView from its first event to the end of its momentum:
+        // deciding per event on which axis dominates handed the tail of a
+        // horizontal swipe (where Y briefly wins) to this view, which cut
+        // the ScrollView's settle animation off mid-way.
+        guard event.phase.isEmpty, event.momentumPhase.isEmpty else { return nil }
         guard abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX) else { return nil }
         return super.hitTest(point)
     }
@@ -51,7 +58,8 @@ private final class ScrollPagerView: NSView {
 
         guard !hasFlippedThisGesture else { return }
 
-        accumulated += event.scrollingDeltaY
+        // A real wheel reports lines, not pixels: one tick is one page.
+        accumulated += event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : (event.scrollingDeltaY > 0 ? 100 : -100)
         if accumulated > Self.threshold {
             onPageChange?(.previous)
             hasFlippedThisGesture = true
@@ -77,12 +85,16 @@ private struct LaunchpadScrollPagerRepresentable: NSViewRepresentable {
 }
 
 extension View {
-    /// Overlays the mouse-wheel-only page flipper described above. Layer
-    /// this *under* the icons (as a `.background`, not `.overlay`) so it
-    /// never sits on top of anything else hit-testable — it only ever
-    /// claims vertical scroll events regardless of stacking order, but
-    /// keeping it in the background is the least surprising place for it.
+    /// Overlays the mouse-wheel-only page flipper described above. An
+    /// overlay, not a background: `pagedGrid`'s own `ScrollView` sits over
+    /// the grid area and swallows every scroll event there — including the
+    /// vertical ticks of a plain mouse wheel, which it can't use (it only
+    /// scrolls horizontally) but doesn't pass on to a view *behind* it —
+    /// so a pager underneath never saw any. On top it gets first look, and
+    /// stays harmless there: `hitTest` claims only vertical-dominant scroll
+    /// events and nothing else, so clicks, drags and horizontal trackpad
+    /// swipes all fall straight through to what's below.
     func launchpadScrollPager(onPageChange: @escaping (LaunchpadEdge) -> Void) -> some View {
-        background(LaunchpadScrollPagerRepresentable(onPageChange: onPageChange))
+        overlay(LaunchpadScrollPagerRepresentable(onPageChange: onPageChange))
     }
 }

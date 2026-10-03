@@ -25,13 +25,6 @@ final class PermissionsManager {
         startPollingUntilGranted()
     }
 
-    func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-        startPollingUntilGranted()
-    }
-
     /// System Settings doesn't notify us when the toggle changes, so we poll
     /// briefly while the onboarding screen is up.
     private func startPollingUntilGranted() {

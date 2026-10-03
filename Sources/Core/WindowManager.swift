@@ -554,8 +554,15 @@ final class WindowManager {
             let axWindows = Self.copyArrayAttribute(appElement, kAXWindowsAttribute) ?? []
 
             for axWindow in axWindows {
-                let title = Self.copyStringAttribute(axWindow, kAXTitleAttribute) ?? app.localizedName ?? L("window.untitled")
-                guard Self.isRealWindow(axWindow, title: title, bundleIdentifier: app.bundleIdentifier) else { continue }
+                let ownTitle = Self.copyStringAttribute(axWindow, kAXTitleAttribute)
+                // An *empty* title (Photos, for one, reports "" for its main
+                // window) is a real window whose title just isn't exposed,
+                // not a phantom — it takes the app's name like a missing
+                // title does, but unlike a missing one it has to prove it's
+                // a genuine standard window first (see `isRealWindow`).
+                let titleIsEmpty = ownTitle?.isEmpty == true
+                let title = (titleIsEmpty ? nil : ownTitle) ?? app.localizedName ?? L("window.untitled")
+                guard Self.isRealWindow(axWindow, title: title, requiresStandardSubrole: titleIsEmpty, bundleIdentifier: app.bundleIdentifier) else { continue }
 
                 let id = Self.stableID(for: axWindow, pid: app.processIdentifier, title: title)
                 guard !seenIDs.contains(id) else { continue }
@@ -607,7 +614,7 @@ final class WindowManager {
             let stillValid = AXUIElementCopyAttributeValue(previous.axElement, kAXTitleAttribute as CFString, &titleValue) == .success
             guard stillValid else { continue } // window truly closed: drop it
 
-            let currentTitle = (titleValue as? String) ?? previous.title
+            let currentTitle = (titleValue as? String).flatMap { $0.isEmpty ? nil : $0 } ?? previous.title
 
             // Belt-and-suspenders: if this cycle's fresh scan already found
             // a *different*, genuinely live window for the same process
@@ -637,6 +644,23 @@ final class WindowManager {
             )
             collected.append(reAdded)
             seenIDs.insert(recomputedID)
+        }
+
+        // Any window going from minimized back to open — however that
+        // happened — ends the minimize-all button's restore memory.
+        if let remembered = minimizedByButton {
+            let wasMinimized = Dictionary(windows.map { ($0.id, $0.isMinimized) }, uniquingKeysWith: { first, _ in first })
+            var restoredSomewhere = collected.contains { wasMinimized[$0.id] == true && !$0.isMinimized }
+            // Also asks the remembered windows themselves, not just ids
+            // seen across two refreshes: an id can change when a window is
+            // minimized, which would make a restore invisible to the
+            // comparison above. Skipped right after the press, since AX can
+            // still report a window as open for the length of its minimize
+            // animation.
+            if !restoredSomewhere, Date().timeIntervalSince(minimizedByButtonAt) > 1.5 {
+                restoredSomewhere = remembered.contains { Self.copyBoolAttribute($0, kAXMinimizedAttribute) == false }
+            }
+            if restoredSomewhere { minimizedByButton = nil }
         }
 
         // Whether this refresh introduces or removes a window for an app
@@ -796,14 +820,70 @@ final class WindowManager {
     }
 
     /// "Minimize all": minimizes whatever isn't already minimized. A no-op
-    /// (not a "restore everything" toggle any more) when everything's
-    /// already minimized — pressing it again shouldn't bring windows back.
+    /// when everything's already minimized. What the ⌘⌥D shortcut and the
+    /// drag-hover spring-load use — they never restore anything; only the
+    /// bar's own button does, via `toggleMinimizeAll()`.
     func minimizeAll() {
         let toMinimize = windows.filter { !$0.isMinimized }
         guard !toMinimize.isEmpty else { return }
         for window in toMinimize {
             AXUIElementSetAttributeValue(window.axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef)
         }
+        refresh()
+    }
+
+    /// Exactly the windows the minimize-all *button* last minimized, or
+    /// `nil` once there's nothing worth restoring. Held as the windows'
+    /// own Accessibility elements rather than ids: an id can change once a
+    /// window is minimized, which left this unable to recognize its own
+    /// windows again. Cleared by `refresh()` the moment any window comes
+    /// back from minimized by any route at all (the bar, the Dock, ⌘Tab,
+    /// the app itself) — so pressing the button again never undoes an
+    /// arrangement the user has since started rebuilding by hand.
+    private var minimizedByButton: [AXUIElement]?
+    private var minimizedByButtonAt = Date.distantPast
+
+    /// The minimize-all button: first press minimizes everything open and
+    /// remembers which windows that was; a second press — if nothing has
+    /// been restored in between (see `minimizedByButton`) — restores just
+    /// those windows. Windows that were already minimized beforehand were
+    /// never part of the set, and ones closed since are simply gone. With
+    /// everything already minimized and nothing remembered, it restores
+    /// every window instead of doing nothing.
+    func toggleMinimizeAll() {
+        // Judge against the real current state, not whatever the last
+        // 2-second poll saw — a restore done by hand just before this press
+        // would otherwise still look like it hadn't happened.
+        refresh()
+
+        if let remembered = minimizedByButton {
+            minimizedByButton = nil
+            let toRestore = remembered.filter { Self.copyBoolAttribute($0, kAXMinimizedAttribute) == true }
+            // Every remembered window has since been closed: nothing to
+            // bring back, so this press should minimize like a fresh one
+            // rather than silently do nothing.
+            if !toRestore.isEmpty {
+                for element in toRestore {
+                    AXUIElementSetAttributeValue(element, kAXMinimizedAttribute as CFString, false as CFTypeRef)
+                }
+                refresh()
+                return
+            }
+        }
+        let toMinimize = windows.filter { !$0.isMinimized }
+        if toMinimize.isEmpty {
+            guard !windows.isEmpty else { return }
+            for window in windows {
+                AXUIElementSetAttributeValue(window.axElement, kAXMinimizedAttribute as CFString, false as CFTypeRef)
+            }
+            refresh()
+            return
+        }
+        for window in toMinimize {
+            AXUIElementSetAttributeValue(window.axElement, kAXMinimizedAttribute as CFString, true as CFTypeRef)
+        }
+        minimizedByButton = toMinimize.map(\.axElement)
+        minimizedByButtonAt = Date()
         refresh()
     }
 
@@ -834,7 +914,7 @@ final class WindowManager {
 
     // MARK: - AX attribute helpers
 
-    private static func isRealWindow(_ element: AXUIElement, title: String, bundleIdentifier: String?) -> Bool {
+    private static func isRealWindow(_ element: AXUIElement, title: String, requiresStandardSubrole: Bool, bundleIdentifier: String?) -> Bool {
         // Filter out AX-visible but non-window artifacts (menus, popovers) that
         // sometimes surface an empty/system title.
         guard !title.isEmpty else { return false }
@@ -843,6 +923,11 @@ final class WindowManager {
         // desktop itself, even with zero actual Finder windows open — which
         // would otherwise make Finder look permanently "open" in the
         // taskbar. Only its real Finder-window subrole counts.
+        if requiresStandardSubrole,
+           (copyStringAttribute(element, kAXSubroleAttribute) ?? "") != (kAXStandardWindowSubrole as String) {
+            return false
+        }
+
         if bundleIdentifier == "com.apple.finder" {
             let subrole = copyStringAttribute(element, kAXSubroleAttribute) ?? ""
             return subrole == (kAXStandardWindowSubrole as String)

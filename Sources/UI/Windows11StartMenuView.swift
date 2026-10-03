@@ -13,6 +13,7 @@ struct Windows11StartMenuView: View {
     let state: StartMenuState
     let liquidGlassEnabled: Bool
     let liquidGlassIntensity: Double
+    let infiniteScroll: Bool
     let onLaunch: () -> Void
 
     private var tokens: ThemeTokens { theme.tokens }
@@ -40,14 +41,14 @@ struct Windows11StartMenuView: View {
         VStack(spacing: 0) {
             searchField
             ScrollViewReader { proxy in
-                ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id)) {
+                ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id), indicators: .never, state: state, loops: loopsEnabled) {
                     appGrid
                         .padding(20)
                 }
                 .onChange(of: state.selectedIndex) { _, newIndex in
                     guard displayedApps.indices.contains(newIndex) else { return }
                     withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(displayedApps[newIndex].id, anchor: .center)
+                        proxy.scrollTo(LoopList.id(copy: LoopList.middleCopy, slot: newIndex), anchor: .center)
                     }
                 }
             }
@@ -106,13 +107,22 @@ struct Windows11StartMenuView: View {
         .padding(16)
     }
 
+    private var loopsEnabled: Bool {
+        LoopList.shouldLoop(enabled: infiniteScroll, searching: !state.query.isEmpty, count: displayedApps.count, columns: Self.columnCount, visibleRows: 4)
+    }
+
     private var appGrid: some View {
         LazyVGrid(columns: gridColumns, spacing: 16) {
-            ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, app in
-                appCell(app, isSelected: index == state.selectedIndex)
-                    .id(app.id)
+            ForEach(LoopList.entries(displayedApps, columns: Self.columnCount, loops: loopsEnabled)) { entry in
+                if let app = entry.item {
+                    appCell(app, isSelected: entry.slot == state.selectedIndex)
+                        .id(entry.id)
+                } else {
+                    Color.clear.frame(height: 1).id(entry.id)
+                }
             }
         }
+        .scrollTargetLayout()
     }
 
     private func appCell(_ app: InstalledApp, isSelected: Bool) -> some View {

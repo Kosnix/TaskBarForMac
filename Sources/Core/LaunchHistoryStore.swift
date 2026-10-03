@@ -33,9 +33,16 @@ enum LaunchHistoryStore {
     /// `AppDiscovery`'s alphabetical one), after all the ones that do have
     /// a recorded timestamp.
     static func sortedByRecency<App>(_ apps: [App], bundleIdentifier: (App) -> String?) -> [App] {
-        apps.enumerated()
+        // Read once up front, not per comparison: `lastLaunchTimestamp`
+        // re-parses the whole stored dictionary out of `UserDefaults` on
+        // every call, and a sort calls it twice per comparison — thousands
+        // of reads for a few hundred apps, on every re-render of a menu
+        // that sorts in its `body`, which is what made scrolling stutter.
+        let timestamps = allTimestamps()
+        return apps.enumerated()
+            .map { (offset: $0.offset, element: $0.element, timestamp: bundleIdentifier($0.element).flatMap { timestamps[$0] }) }
             .sorted { lhs, rhs in
-                switch (lastLaunchTimestamp(bundleIdentifier: bundleIdentifier(lhs.element)), lastLaunchTimestamp(bundleIdentifier: bundleIdentifier(rhs.element))) {
+                switch (lhs.timestamp, rhs.timestamp) {
                 case (let l?, let r?): return l > r
                 case (nil, nil): return lhs.offset < rhs.offset
                 case (.some, nil): return true

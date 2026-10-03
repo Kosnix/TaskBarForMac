@@ -49,6 +49,8 @@ enum StartMenuStyle: String, CaseIterable {
     /// Opens the real, system Spotlight instead of any menu this app draws
     /// itself — see `SpotlightTrigger`.
     case realSpotlight
+    /// Opens macOS's own "Apps" menu (macOS 27+) — see `NativeAppsTrigger`.
+    case nativeApps
     /// macOS's own (now-retired) Launchpad: a full-screen, paginated grid
     /// of every installed app over a blurred/dimmed desktop, with a
     /// type-to-search field at the top. Unlike every other style, this one
@@ -360,7 +362,7 @@ final class ThemeStore {
             let columns: CGFloat = 6
             let width = columns * (iconSize + 20) + (columns - 1) * 12 + 40
             return CGSize(width: max(floor.width, width), height: floor.height)
-        case .kickoff, .realSpotlight:
+        case .kickoff, .realSpotlight, .nativeApps:
             // Matches `StartMenuView`'s own fixed 180pt category sidebar
             // plus its 3-column grid (60pt minimum per column) and padding.
             let width: CGFloat = 180 + 3 * 60 + 2 * 8 + 2 * 10 + 4
@@ -442,6 +444,17 @@ final class ThemeStore {
         }
     }
 
+    private static let infiniteScrollEnabledKey = "TB.startMenu.infiniteScroll"
+
+    /// When on, the Kickoff / Windows 7 / Windows 11 app lists loop
+    /// endlessly instead of stopping at the first and last app — see
+    /// `ThemedScrollView`.
+    var infiniteScrollEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(infiniteScrollEnabled, forKey: Self.infiniteScrollEnabledKey)
+        }
+    }
+
     private static let startMenuTriggerModifierKey = "TB.startMenu.triggerModifier"
 
     /// Which modifier, tapped alone, toggles the start menu —
@@ -514,6 +527,7 @@ final class ThemeStore {
         centerIncludesStartButton = UserDefaults.standard.bool(forKey: Self.centerIncludesStartButtonKey)
         clockEnabled = (UserDefaults.standard.object(forKey: Self.clockEnabledKey) as? Bool) ?? true
         clockShowDate = UserDefaults.standard.bool(forKey: Self.clockShowDateKey)
+        infiniteScrollEnabled = UserDefaults.standard.bool(forKey: Self.infiniteScrollEnabledKey)
         if let storedStyle = UserDefaults.standard.string(forKey: Self.startMenuStyleKey), let style = StartMenuStyle(rawValue: storedStyle) {
             startMenuStyle = style
         }

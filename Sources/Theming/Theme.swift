@@ -214,3 +214,24 @@ extension Color {
         self.init(.sRGB, red: r, green: g, blue: b, opacity: a)
     }
 }
+
+extension ThemeTokens {
+    /// Which tone the translucent glass behind this theme's text has to be.
+    /// A `NSVisualEffectView` material follows the *system* appearance by
+    /// default, so a dark theme (light text) over a light-mode macOS got a
+    /// pale blurred backdrop under white text — illegible on a white
+    /// wallpaper. Judged from the theme's own text color (light text means
+    /// a dark theme) rather than the system setting, since the theme is
+    /// what picked the text color in the first place.
+    var materialAppearance: NSAppearance? {
+        var hex = colors.textPrimary.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        if hex.count == 8 { hex = String(hex.prefix(6)) }
+        var rgb: UInt64 = 0
+        guard hex.count == 6, Scanner(string: hex).scanHexInt64(&rgb) else { return nil }
+        let r = Double((rgb & 0xFF0000) >> 16) / 255
+        let g = Double((rgb & 0x00FF00) >> 8) / 255
+        let b = Double(rgb & 0x0000FF) / 255
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return NSAppearance(named: luminance > 0.5 ? .darkAqua : .aqua)
+    }
+}

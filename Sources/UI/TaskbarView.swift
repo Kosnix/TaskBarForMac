@@ -288,7 +288,7 @@ struct TaskbarView: View {
     private func startButton(theme: Theme) -> some View {
         let tokens = theme.tokens
         return Button {
-            startMenuState.toggleOrOpenSpotlight(style: themeStore.startMenuStyle)
+            startMenuState.toggleOrHandOff(style: themeStore.startMenuStyle)
         } label: {
             HStack(spacing: 6) {
                 // No filled background: just the logo, sitting directly on
@@ -489,7 +489,7 @@ struct TaskbarView: View {
         .help(L("help.minimize_all"))
         // Same idea as macOS's "Active Corner → Desktop": dragging files
         // over this button briefly shows the desktop to drop them onto.
-        .taskReorderable(bundleIdentifier: nil, windowManager: windowManager, onSpringLoad: onMinimizeAll)
+        .taskReorderable(bundleIdentifier: nil, windowManager: windowManager, onSpringLoad: { windowManager.minimizeAll() })
     }
 
     private func trashButton(theme: Theme) -> some View {

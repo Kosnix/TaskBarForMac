@@ -47,21 +47,38 @@ final class AppDiscovery {
             guard let self else { return }
             await MainActor.run {
                 self.apply(found)
+                self.rebuildWatchers()
             }
-        }
-        if directoryWatchers.isEmpty {
-            startWatchingForChanges()
         }
     }
 
-    /// Installing or removing an app changes one of `standardDirectories`'
-    /// own contents — without this, a freshly installed app just never
-    /// showed up in the start menu until the bar itself was relaunched.
-    /// Same debounced-file-watcher approach `ThemeStore` already uses for
-    /// its theme folder, just watching directory *listings* instead of a
-    /// single file's contents.
-    private func startWatchingForChanges() {
+    /// Installing or removing an app changes the contents of the folder it
+    /// lives in — without this, a freshly installed app just never showed
+    /// up in the start menu until the bar itself was relaunched (and a
+    /// trashed one never left). Same debounced-file-watcher approach
+    /// `ThemeStore` already uses for its theme folder, just watching
+    /// directory *listings* instead of a single file's contents.
+    ///
+    /// Watches the standard directories *and* the plain folders directly
+    /// inside them (`/Applications/Utilities`, a vendor's own subfolder…):
+    /// the scan reaches apps there too, but trashing one of them only
+    /// changes its own subfolder, which a watch on `/Applications` alone
+    /// never sees. Rebuilt after every scan, so a subfolder created later
+    /// gets picked up too.
+    private func rebuildWatchers() {
+        directoryWatchers.forEach { $0.cancel() }
+        directoryWatchers.removeAll()
+
+        var directories = Self.standardDirectories
         for directory in Self.standardDirectories {
+            let entries = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+            for entry in entries where entry.pathExtension != "app" {
+                if (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+                    directories.append(entry)
+                }
+            }
+        }
+        for directory in directories {
             let fd = open(directory.path, O_EVTONLY)
             guard fd >= 0 else { continue }
             let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write], queue: .main)
@@ -70,6 +87,16 @@ final class AppDiscovery {
             source.resume()
             directoryWatchers.append(source)
         }
+    }
+
+    /// Drops any app whose bundle is no longer on disk — a cheap existence
+    /// check (no rescan), so it can run every time the start menu opens.
+    @MainActor
+    func pruneMissingApps() {
+        let remaining = apps.filter { FileManager.default.fileExists(atPath: $0.url.path) }
+        guard remaining.count != apps.count else { return }
+        apps = remaining
+        categories = Array(Set(remaining.map(\.category))).sorted()
     }
 
     /// Debounced: installing an app (unzip, drag-copy, an installer package)
@@ -219,6 +246,9 @@ final class AppDiscovery {
         // login items) — only top-level, user-launchable apps belong here.
         let parentPath = url.deletingLastPathComponent().path
         guard !parentPath.contains(".app/") else { return nil }
+        // Something in the Trash is, as far as the user's concerned, gone —
+        // Spotlight still indexes it.
+        guard !url.path.contains("/.Trash/") else { return nil }
 
         guard let bundle = Bundle(url: url) else { return nil }
 

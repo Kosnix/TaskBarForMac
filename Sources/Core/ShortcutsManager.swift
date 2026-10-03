@@ -13,8 +13,7 @@ import AppKit
 /// keyboard), and/or a full key combination. Either can be turned off
 /// independently (`.none` for the modifier, `nil` for the combo).
 ///
-/// Fixed, not configurable: ⌘⌥D = minimize all, ⌘⌥1…9 = focus the Nth
-/// window.
+/// Fixed, not configurable: ⌘⌥1…9 = focus the Nth window.
 final class ShortcutsManager {
     private let windowManager: WindowManager
     private let startMenuState: StartMenuState
@@ -29,7 +28,6 @@ final class ShortcutsManager {
 
     /// macOS virtual key codes (US ANSI layout) for the keys we bind.
     private enum KeyCode {
-        static let d: UInt16 = 0x02
         static let escape: UInt16 = 0x35
         static let digits: [UInt16] = [0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19] // 1...9
     }
@@ -156,10 +154,6 @@ final class ShortcutsManager {
             return false
         }
 
-        if event.keyCode == KeyCode.d {
-            windowManager.minimizeAll()
-            return true
-        }
         if let index = KeyCode.digits.firstIndex(of: event.keyCode) {
             windowManager.activateEntry(at: index)
             return true

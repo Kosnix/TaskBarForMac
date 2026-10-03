@@ -1,6 +1,5 @@
 /* General */
 "app.no_theme" = "Нет доступных тем";
-"button.apply" = "Применить";
 "button.cancel" = "Отмена";
 
 /* Personalization menu */
@@ -58,6 +57,7 @@
 "settings.start_menu_style.windows7" = "Windows 7";
 "settings.start_menu_style.launchpad" = "Launchpad";
 "settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_style.native_apps" = "Apps (macOS)";
 "settings.start_menu_trigger_modifier" = "Клавиша запуска";
 "settings.start_menu_trigger.none" = "Нет";
 "settings.start_menu_trigger.command" = "Command";
@@ -163,3 +163,4 @@
 "update.error.not_installed" = "Для автоустановки приложение должно быть установлено (.app).";
 "update.error.not_writable" = "Нет прав на запись в папку приложения.";
 "update.error.invalid_package" = "Загруженный файл повреждён или недействителен.";
+"settings.infinite_scroll" = "Бесконечная прокрутка списков";

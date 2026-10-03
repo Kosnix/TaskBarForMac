@@ -86,7 +86,7 @@ struct PanelBackground: View {
                 // system's own Liquid Glass transparency slider, while
                 // reading much lighter than `.hudWindow`'s deliberately
                 // dark HUD tone.
-                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow, appearance: tokens.materialAppearance)
                 glassTintColor
             }
             .opacity(tokens.panel.backgroundOpacity)
@@ -99,7 +99,7 @@ struct PanelBackground: View {
             // opaque.
             ZStack {
                 Color(hex: tokens.panel.backgroundColor)
-                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow, appearance: tokens.materialAppearance)
                     .opacity(0.6)
             }
             .opacity(tokens.panel.backgroundOpacity)
@@ -127,7 +127,7 @@ struct GlassButtonBackground: View {
             let tint = Color(hex: tokens.colors.buttonBackground).opacity(liquidGlassIntensity * 0.85)
             ZStack {
                 // Same material as `PanelBackground` — see its doc comment.
-                VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                VisualEffectView(material: .sidebar, blendingMode: .behindWindow, appearance: tokens.materialAppearance)
                 tint
             }
         } else {

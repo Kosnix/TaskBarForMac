@@ -15,6 +15,7 @@ struct Windows7StartMenuView: View {
     let state: StartMenuState
     let liquidGlassEnabled: Bool
     let liquidGlassIntensity: Double
+    let infiniteScroll: Bool
     let onLaunch: () -> Void
 
     private var tokens: ThemeTokens { theme.tokens }
@@ -70,19 +71,36 @@ struct Windows7StartMenuView: View {
     private var leftColumn: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id)) {
+                // Computed once per render and reused — `displayedApps` sorts
+                // and filters every app each time it's read.
+                let apps = displayedApps
+                let loops = LoopList.shouldLoop(enabled: infiniteScroll, searching: !state.query.isEmpty, count: apps.count, columns: 1, visibleRows: 14)
+                ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: apps.map(\.id), state: state, loops: loops) {
                     LazyVStack(spacing: 1) {
-                        ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, app in
-                            programRow(app, isSelected: index == state.selectedIndex)
-                                .id(app.id)
+                        ForEach(LoopList.entries(apps, columns: 1, loops: loops)) { entry in
+                            if let app = entry.item {
+                                // Hover and selection are read inside the
+                                // wrapper's own body, not this one: scrolling
+                                // moves rows under a still mouse, firing hover
+                                // changes constantly, and each one used to
+                                // re-run this whole body (re-sorting every app).
+                                // Now only the rows whose state changed redraw.
+                                HoverTrackedRow(state: state, id: app.id) { isHovered, isSelected in
+                                    programRow(app, isSelected: isSelected(entry.slot), isHovered: isHovered)
+                                }
+                                .id(entry.id)
+                            } else {
+                                Color.clear.frame(height: 1).id(entry.id)
+                            }
                         }
                     }
+                    .scrollTargetLayout()
                     .padding(6)
                 }
                 .onChange(of: state.selectedIndex) { _, newIndex in
                     guard displayedApps.indices.contains(newIndex) else { return }
                     withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(displayedApps[newIndex].id, anchor: .center)
+                        proxy.scrollTo(LoopList.id(copy: LoopList.middleCopy, slot: newIndex), anchor: .center)
                     }
                 }
             }
@@ -92,9 +110,8 @@ struct Windows7StartMenuView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func programRow(_ app: InstalledApp, isSelected: Bool) -> some View {
-        let isHovered = state.hoveredRowID == app.id
-        return Button {
+    private func programRow(_ app: InstalledApp, isSelected: Bool, isHovered: Bool) -> some View {
+        Button {
             state.selectedIndex = displayedApps.firstIndex(where: { $0.id == app.id }) ?? state.selectedIndex
             launch(app)
         } label: {
@@ -194,8 +211,8 @@ struct Windows7StartMenuView: View {
         // Left matches the program list's own `.padding(6)` above (see
         // `leftColumn`). Right is flush (0), not also 6 — the list sits in
         // a plain `ScrollView` with no outer padding of its own, so its
-        // scrollbar (hidden via `.scrollIndicators(.hidden)`, but still
-        // occupying that edge) tracks the column's true trailing edge, not
+        // scrollbar (never shown, but the list still ends at that
+        // edge) tracks the column's true trailing edge, not
         // the 6pt-inset one the *rows* happen to stop at. Matching the
         // field's own trailing edge to that same true edge is what lines
         // the two up.
@@ -220,6 +237,7 @@ struct Windows7StartMenuView: View {
                 }
                 .padding(10)
             }
+            .scrollIndicators(.never)
             Spacer(minLength: 0)
             Divider()
             shutDownRow
@@ -367,5 +385,18 @@ struct Windows7StartMenuView: View {
         menu.addItem(ClosureMenuItem(title: L("session.logout"), handler: SessionManager.logOut))
         menu.addItem(ClosureMenuItem(title: L("session.restart"), handler: SessionManager.restart))
         return menu
+    }
+}
+
+/// Reads `state.hoveredRowID` and `state.selectedIndex` in *its own* `body`,
+/// so Observation only invalidates the rows those values actually affect —
+/// not `Windows7StartMenuView.body`, which re-sorts every installed app.
+private struct HoverTrackedRow<Content: View>: View {
+    let state: StartMenuState
+    let id: String
+    let content: (_ isHovered: Bool, _ isSelected: (Int) -> Bool) -> Content
+
+    var body: some View {
+        content(state.hoveredRowID == id) { index in index == state.selectedIndex }
     }
 }

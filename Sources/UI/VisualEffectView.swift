@@ -13,11 +13,15 @@ import SwiftUI
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
     var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
+    /// Pins the material's light/dark tone instead of following the
+    /// system's — `nil` keeps following it.
+    var appearance: NSAppearance?
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
+        view.appearance = appearance
         view.state = .active
         return view
     }
@@ -25,5 +29,6 @@ struct VisualEffectView: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
+        nsView.appearance = appearance
     }
 }
