@@ -11,7 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let fullscreenObserver = FullscreenObserver()
 
     private var panel: TaskbarPanel?
-    private var dockHeightPollTimer: Timer?
     private var spaceReclaimTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -27,8 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager.startAutoRefresh()
 
         dockController.reserveDockSpace()
-        themeStore.setMinimumPanelHeight(DockController.currentReservedHeight())
-        startPollingDockHeight()
         startReclaimingReservedSpace()
 
         let panel = TaskbarPanel(
@@ -56,7 +53,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         windowManager.stopAutoRefresh()
-        dockHeightPollTimer?.invalidate()
         spaceReclaimTimer?.invalidate()
         fullscreenObserver.stop()
         dockController.restoreDock()
@@ -64,27 +60,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
-    }
-
-    /// The real Dock relaunches asynchronously after `reserveDockSpace` —
-    /// first the `killall`'d process has to actually restart, then *it*
-    /// applies `autohide`, so `visibleFrame` still reports the Dock's old
-    /// (visible) size for a bit. A short, generous polling window means the
-    /// bar's `minimumPanelHeight` floor visibly settles to ~0 whenever the
-    /// Dock actually finishes hiding, instead of possibly locking onto a
-    /// transient pre-restart reading.
-    private func startPollingDockHeight() {
-        var tickCount = 0
-
-        dockHeightPollTimer?.invalidate()
-        dockHeightPollTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            tickCount += 1
-            self.themeStore.setMinimumPanelHeight(DockController.currentReservedHeight())
-            if tickCount >= 20 {
-                timer.invalidate()
-            }
-        }
     }
 
     /// With the real Dock fully auto-hidden, macOS no longer reserves any

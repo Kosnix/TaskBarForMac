@@ -25,11 +25,53 @@ struct LaunchpadStartMenuView: View {
     let onLaunch: () -> Void
 
     /// The real thing's own classic grid — 7 columns by 5 rows per page,
-    /// regardless of screen size (it just paginates sooner on a smaller
-    /// display rather than shrinking the grid to fit).
+    /// regardless of screen size. What does follow the screen is how big
+    /// the icons are and how far apart (see `Metrics`).
     private static let columns = 7
     private static let rows = 5
-    private static let iconSize: CGFloat = 96
+
+    /// Icon size and spacing, fitted to the screen the menu covers: the
+    /// grid always fills the space between the search field and the page
+    /// dots, so a small laptop display gets smaller, tighter icons (nothing
+    /// cut off) and a big monitor gets larger, more spread-out ones.
+    private struct Metrics {
+        let iconSize: CGFloat
+        let rowSpacing: CGFloat
+        let columnSpacing: CGFloat
+        /// Widest the grid is allowed to get — past it the columns would
+        /// drift much further apart than the rows.
+        let gridWidth: CGFloat
+
+        /// Fixed chrome around the grid (see `body`): top padding, search
+        /// field, its spacing, page dots with their spacing, bottom padding.
+        private static let verticalChrome: CGFloat = 215
+        private static let horizontalInset: CGFloat = 160
+        /// What a cell adds around its icon: the label, its spacing, and
+        /// the cell's own padding.
+        private static let cellExtraHeight: CGFloat = 39
+        private static let cellExtraWidth: CGFloat = 16
+        private static let minGap: CGFloat = 14
+
+        init(screenSize: CGSize) {
+            let availableHeight = screenSize.height - Self.verticalChrome
+            let availableWidth = screenSize.width - Self.horizontalInset
+            let rows = CGFloat(LaunchpadStartMenuView.rows)
+            let columns = CGFloat(LaunchpadStartMenuView.columns)
+
+            let fitHeight = (availableHeight - (rows - 1) * Self.minGap) / rows - Self.cellExtraHeight
+            let fitWidth = (availableWidth - (columns - 1) * Self.minGap) / columns - Self.cellExtraWidth
+            iconSize = min(max(min(fitHeight, fitWidth), 48), 128)
+
+            let cellHeight = iconSize + Self.cellExtraHeight
+            rowSpacing = min(max((availableHeight - rows * cellHeight) / (rows - 1), Self.minGap), 72)
+            columnSpacing = max(rowSpacing * 1.5, Self.minGap)
+            gridWidth = min(availableWidth, columns * (iconSize + Self.cellExtraWidth) + (columns - 1) * columnSpacing)
+        }
+    }
+
+    private var metrics: Metrics {
+        Metrics(screenSize: DockController.dockScreen?.frame.size ?? CGSize(width: 1440, height: 900))
+    }
 
     /// A drop point within this many points of a target cell's own center
     /// counts as "directly on it" (create/join a folder) rather than
@@ -85,7 +127,7 @@ struct LaunchpadStartMenuView: View {
     }
 
     private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 32), count: Self.columns)
+        Array(repeating: GridItem(.flexible(), spacing: metrics.columnSpacing), count: Self.columns)
     }
 
     var body: some View {
@@ -97,7 +139,7 @@ struct LaunchpadStartMenuView: View {
                 Group {
                     if isSearching {
                         searchGrid
-                            .padding(.horizontal, 80)
+                            .frame(maxWidth: metrics.gridWidth)
                     } else {
                         // Not horizontally padded here, unlike every other
                         // piece of this screen — `pagedGrid` needs the
@@ -281,18 +323,16 @@ struct LaunchpadStartMenuView: View {
                 ForEach(0..<pageCount, id: \.self) { page in
                     Group {
                         if renderedPages.contains(page) {
-                            LazyVGrid(columns: gridColumns, spacing: 28) {
+                            LazyVGrid(columns: gridColumns, spacing: metrics.rowSpacing) {
                                 ForEach(items(onPage: page)) { item in
                                     cell(for: item)
                                 }
                             }
-                            // The 80pt inset every other piece of this
-                            // screen gets from `body`'s own padding —
-                            // applied per page here instead, since the
-                            // slide itself needs the true, unpadded screen
-                            // width to clip against (see `body`'s own
-                            // comment on `pagedGrid`).
-                            .padding(.horizontal, 80)
+                            // Centered at the grid's own width rather than
+                            // inset from `body`: the slide itself needs the
+                            // true, unpadded screen width to clip against
+                            // (see `body`'s own comment on `pagedGrid`).
+                            .frame(maxWidth: metrics.gridWidth)
                         } else {
                             Color.clear
                         }
@@ -322,12 +362,12 @@ struct LaunchpadStartMenuView: View {
 
     private var searchGrid: some View {
         ScrollView {
-            LazyVGrid(columns: gridColumns, spacing: 28) {
+            LazyVGrid(columns: gridColumns, spacing: metrics.rowSpacing) {
                 ForEach(searchResults) { app in
                     VStack(spacing: 8) {
                         Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                             .resizable()
-                            .frame(width: Self.iconSize, height: Self.iconSize)
+                            .frame(width: metrics.iconSize, height: metrics.iconSize)
                         Text(displayName(for: app))
                             .font(.system(size: 12))
                             .foregroundStyle(.white)
@@ -392,7 +432,7 @@ struct LaunchpadStartMenuView: View {
         VStack(spacing: 8) {
             Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                 .resizable()
-                .frame(width: Self.iconSize, height: Self.iconSize)
+                .frame(width: metrics.iconSize, height: metrics.iconSize)
                 .wiggle(isActive: state.isEditingLaunchpad, seed: app.id.hashValue)
             Text(displayName(for: app))
                 .font(.system(size: 12))
@@ -449,7 +489,7 @@ struct LaunchpadStartMenuView: View {
                 }
             },
             onLongPress: { state.isEditingLaunchpad = true },
-            dragImageProvider: { Self.renderedImage(of: folderIcon(appIDs: appIDs), size: NSSize(width: Self.iconSize, height: Self.iconSize)) },
+            dragImageProvider: { Self.renderedImage(of: folderIcon(appIDs: appIDs), size: NSSize(width: metrics.iconSize, height: metrics.iconSize)) },
             onDragWillBegin: {
                 state.launchpadDragItemID = id
             },
@@ -462,9 +502,9 @@ struct LaunchpadStartMenuView: View {
 
     private func folderIcon(appIDs: [String]) -> some View {
         let previewApps = appIDs.prefix(4).compactMap { appsByID[$0] }
-        return RoundedRectangle(cornerRadius: 22)
+        return RoundedRectangle(cornerRadius: metrics.iconSize * 0.23)
             .fill(Color.white.opacity(0.18))
-            .frame(width: Self.iconSize, height: Self.iconSize)
+            .frame(width: metrics.iconSize, height: metrics.iconSize)
             .overlay(
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 5) {
                     ForEach(previewApps, id: \.id) { app in
@@ -584,7 +624,7 @@ struct LaunchpadStartMenuView: View {
         VStack(spacing: 6) {
             Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                 .resizable()
-                .frame(width: Self.iconSize * 0.72, height: Self.iconSize * 0.72)
+                .frame(width: metrics.iconSize * 0.72, height: metrics.iconSize * 0.72)
                 .wiggle(isActive: state.isEditingLaunchpad, seed: app.id.hashValue)
             Text(displayName(for: app))
                 .font(.system(size: 11))

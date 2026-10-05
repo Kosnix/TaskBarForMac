@@ -121,22 +121,26 @@ struct AutoFocusNSTextField: NSViewRepresentable {
         context.coordinator.onNavigate = onNavigate
         context.coordinator.onSubmit = onSubmit
         context.coordinator.accentColor = accentColor
+        context.coordinator.textColor = textColor
+        nsView.textColor = textColor
         context.coordinator.applyAccentColor(to: nsView)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: text, accentColor: accentColor, onNavigate: onNavigate, onSubmit: onSubmit)
+        Coordinator(text: text, accentColor: accentColor, textColor: textColor, onNavigate: onNavigate, onSubmit: onSubmit)
     }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         let text: Binding<String>
         var accentColor: NSColor
+        var textColor: NSColor
         var onNavigate: ((TextFieldNavigation) -> Void)?
         var onSubmit: (() -> Void)?
 
-        init(text: Binding<String>, accentColor: NSColor, onNavigate: ((TextFieldNavigation) -> Void)?, onSubmit: (() -> Void)?) {
+        init(text: Binding<String>, accentColor: NSColor, textColor: NSColor, onNavigate: ((TextFieldNavigation) -> Void)?, onSubmit: (() -> Void)?) {
             self.text = text
             self.accentColor = accentColor
+            self.textColor = textColor
             self.onNavigate = onNavigate
             self.onSubmit = onSubmit
         }
@@ -148,6 +152,11 @@ struct AutoFocusNSTextField: NSViewRepresentable {
         /// first grabbed, not just once at creation.
         func applyAccentColor(to field: NSTextField) {
             guard let editor = field.currentEditor() as? NSTextView else { return }
+            // The field editor (the view that actually shows what's typed)
+            // doesn't always inherit the field's own `textColor`, which left
+            // typed text a different color from the placeholder.
+            editor.textColor = textColor
+            editor.typingAttributes[.foregroundColor] = textColor
             editor.insertionPointColor = accentColor
             editor.selectedTextAttributes = [.backgroundColor: accentColor.withAlphaComponent(0.3)]
         }
@@ -214,7 +223,7 @@ struct AutoFocusTextField: View {
             if text.wrappedValue.isEmpty {
                 Text(placeholder)
                     .font(.system(size: fontSize))
-                    .foregroundStyle(Color(nsColor: textColor).opacity(0.6))
+                    .foregroundStyle(Color(nsColor: textColor))
                     .lineLimit(1)
                     .allowsHitTesting(false)
                     // The field's own text starts a few points in from its

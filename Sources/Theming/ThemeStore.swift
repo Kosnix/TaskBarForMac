@@ -8,15 +8,6 @@ extension Notification.Name {
     /// resize the actual window, not just the content inside it.
     static let panelSizeDidChange = Notification.Name("TB.panelSizeDidChange")
 
-    /// Posted specifically when the *desired* height changes — the user's
-    /// override, or the active theme's own default — as opposed to
-    /// `effectivePanelHeight`, which also folds in the real Dock's measured
-    /// reservation. `AppDelegate` listens for this one to know when to
-    /// re-reserve Dock space; listening to `panelSizeDidChange` instead
-    /// would create a feedback loop, since re-reserving changes the very
-    /// measurement that feeds `effectivePanelHeight`'s floor.
-    static let desiredPanelHeightDidChange = Notification.Name("TB.desiredPanelHeightDidChange")
-
     /// Posted whenever the start menu's effective size changes (a manual
     /// resize, or the taskbar's own height changing the dynamic default),
     /// so `StartMenuPanel` knows to resize the actual window.
@@ -69,17 +60,11 @@ struct ThemeFamily: Identifiable, Hashable {
 
 /// Holds the active theme and every theme discovered on disk, and hot-reloads
 /// the active theme's folder so editing tokens.json updates the UI live.
-/// Also owns the user's panel-size override and the real Dock's measured
-/// minimum height, so the two can be reconciled into one effective height.
+/// Also owns the user's panel-size override.
 @Observable
 final class ThemeStore {
     private(set) var availableThemes: [Theme] = []
     private(set) var activeTheme: Theme?
-
-    /// The height (in points) the real Dock still reserves at the bottom of
-    /// the screen (see `DockController.replaceDock()`). The panel never
-    /// renders shorter than this, so other apps' windows keep avoiding it.
-    private(set) var minimumPanelHeight: CGFloat = 0
 
     private static let heightOverrideKey = "TB.panel.heightOverride"
     private static let activeThemeIDKey = "TB.theme.activeID"
@@ -183,33 +168,18 @@ final class ThemeStore {
                 UserDefaults.standard.removeObject(forKey: Self.heightOverrideKey)
             }
             NotificationCenter.default.post(name: .panelSizeDidChange, object: nil)
-            NotificationCenter.default.post(name: .desiredPanelHeightDidChange, object: nil)
         }
     }
 
-    /// The height the panel *wants* to be — the user's override, or the
-    /// active theme's own default — before it's floored by the real Dock's
-    /// measured reservation. See `.desiredPanelHeightDidChange`.
-    var desiredPanelHeight: CGFloat {
+    /// The panel's height: the user's override, or the active theme's own
+    /// default. Deliberately not floored by the real Dock's reserved height —
+    /// the Dock is auto-hidden, and the reading used to get stuck at ~60pt,
+    /// stopping the bar from going any smaller.
+    var effectivePanelHeight: CGFloat {
         if let panelHeightOverride {
             return CGFloat(panelHeightOverride)
         }
         return CGFloat(activeTheme?.tokens.panel.height ?? 44)
-    }
-
-    /// The real Dock's shadow/reflection renders a little beyond its own
-    /// reserved `visibleFrame` inset, so matching that inset exactly still
-    /// left a sliver of it peeking out; this pads our panel a bit taller so
-    /// it fully covers it. Purely visual — doesn't change what space macOS
-    /// reserves for other windows.
-    private static let dockCoverageBuffer: CGFloat = 8
-
-    /// What the panel should actually render at: the user's override (or
-    /// the theme's default), floored by the real Dock's reserved height
-    /// (plus a small buffer so it's fully covered, not just exactly reserved).
-    var effectivePanelHeight: CGFloat {
-        let floor = minimumPanelHeight > 0 ? minimumPanelHeight + Self.dockCoverageBuffer : 0
-        return max(desiredPanelHeight, floor)
     }
 
     private static let taskDisplayStyleOverrideKey = "TB.taskButton.displayStyleOverride"
@@ -619,13 +589,6 @@ final class ThemeStore {
         startObservingSystemAppearance()
     }
 
-    /// Called once at launch with what `DockController.replaceDock()`
-    /// measured.
-    func setMinimumPanelHeight(_ height: CGFloat) {
-        minimumPanelHeight = height
-        NotificationCenter.default.post(name: .panelSizeDidChange, object: nil)
-    }
-
     func reloadThemeList() {
         // Discovery order is filesystem order (unpredictable), not
         // alphabetical — sort by display name so the theme switcher menu
@@ -640,7 +603,6 @@ final class ThemeStore {
         watchActiveThemeFolder()
         // A theme switch can change the desired height too (each theme has
         // its own default `panel.height`) when there's no user override.
-        NotificationCenter.default.post(name: .desiredPanelHeightDidChange, object: nil)
     }
 
     private func watchActiveThemeFolder() {

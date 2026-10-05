@@ -67,16 +67,6 @@ final class DockController {
         defaults.set(true, forKey: isActiveFlagKey)
     }
 
-    /// A single, non-blocking read of how much space is currently reserved
-    /// at the bottom of the Dock's screen — with the real Dock auto-hidden,
-    /// this is always ~0; `ThemeStore` still floors the panel to it so a
-    /// leftover non-zero reading (e.g. right after `restoreDock()`, before
-    /// autohide re-engages) never leaves the panel shorter than necessary.
-    static func currentReservedHeight() -> CGFloat {
-        guard let screen = dockScreen else { return 0 }
-        return max(0, screen.visibleFrame.minY - screen.frame.minY)
-    }
-
     func restoreDock() {
         defer {
             defaults.removeObject(forKey: isActiveFlagKey)

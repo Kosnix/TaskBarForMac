@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>dev.nikos.taskbarformac</string>
     <key>CFBundleVersion</key>
-    <string>1.2.2</string>
+    <string>1.2.3</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.2</string>
+    <string>1.2.3</string>
     <key>CFBundleExecutable</key>
     <string>TaskBarForMac</string>
     <key>CFBundleIconFile</key>
