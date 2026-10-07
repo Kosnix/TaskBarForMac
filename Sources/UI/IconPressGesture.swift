@@ -28,7 +28,12 @@ private final class PressAndHoldView: NSView {
     var bundleIdentifier: String?
     var onTap: (() -> Void)?
     var onLongPress: (() -> Void)?
+    /// A press of the middle mouse button (a wheel click).
+    var onMiddleClick: (() -> Void)?
     var onHoverChange: ((Bool) -> Void)?
+    /// True from `mouseDown` until release, or until the cursor slides off
+    /// the icon, or the hold turns into edit mode.
+    var onPressChange: ((Bool) -> Void)?
     /// Set for a not-yet-running pinned launcher, which has nothing at all
     /// to show on right-click outside edit mode (see `hitTest`'s doc
     /// comment for why that needs handling here, not just by leaving its
@@ -85,7 +90,7 @@ private final class PressAndHoldView: NSView {
     /// does nothing with it) so it stops there instead of falling through.
     override func hitTest(_ point: NSPoint) -> NSView? {
         switch NSApp.currentEvent?.type {
-        case .leftMouseDown, .leftMouseDragged, .leftMouseUp:
+        case .leftMouseDown, .leftMouseDragged, .leftMouseUp, .otherMouseDown, .otherMouseUp:
             return super.hitTest(point)
         case .rightMouseDown where blocksContextMenuWhenNotEditing && windowManager?.isEditingIcons != true:
             return super.hitTest(point)
@@ -128,19 +133,38 @@ private final class PressAndHoldView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        onPressChange?(true)
         startLocation = event.locationInWindow
         isDraggingToReorder = false
-        dragOriginalFrames = windowManager?.iconFrames ?? [:]
+        // Only this bar's own icons — every bar reports its frames under
+        // its own prefix (see `BarFrames`).
+        let prefix = BarFrames.key((window as? TaskbarPanel)?.barID ?? "", "")
+        dragOriginalFrames = Dictionary(uniqueKeysWithValues: (windowManager?.iconFrames ?? [:]).compactMap { key, frame in
+            key.hasPrefix(prefix) ? (String(key.dropFirst(prefix.count)), frame) : nil
+        })
         pendingLongPress?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             self?.pendingLongPress = nil
+            self?.onPressChange?(false)
             self?.onLongPress?()
         }
         pendingLongPress = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.minimumDuration, execute: workItem)
     }
 
+    override func otherMouseDown(with event: NSEvent) {
+        guard event.buttonNumber == 2 else { return }
+        onPressChange?(true)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        guard event.buttonNumber == 2 else { return }
+        onPressChange?(false)
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onMiddleClick?() }
+    }
+
     override func mouseDragged(with event: NSEvent) {
+        onPressChange?(bounds.contains(convert(event.locationInWindow, from: nil)))
         let distance = hypot(event.locationInWindow.x - startLocation.x, event.locationInWindow.y - startLocation.y)
 
         if windowManager?.isEditingIcons == true, let bundleIdentifier, distance > Self.dragStartThreshold {
@@ -158,6 +182,7 @@ private final class PressAndHoldView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        onPressChange?(false)
         defer { isDraggingToReorder = false }
         // A completed reorder drag, or a long-press that already fired,
         // shouldn't *also* register as a tap on release.
@@ -236,6 +261,8 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
     let onTap: () -> Void
     let onLongPress: () -> Void
     let onHoverChange: (Bool) -> Void
+    let onPressChange: (Bool) -> Void
+    let onMiddleClick: (() -> Void)?
     var blocksContextMenuWhenNotEditing = false
 
     func makeNSView(context: Context) -> PressAndHoldView {
@@ -245,6 +272,8 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
         view.onTap = onTap
         view.onLongPress = onLongPress
         view.onHoverChange = onHoverChange
+        view.onPressChange = onPressChange
+        view.onMiddleClick = onMiddleClick
         view.blocksContextMenuWhenNotEditing = blocksContextMenuWhenNotEditing
         return view
     }
@@ -255,12 +284,16 @@ private struct PressAndHoldOverlay: NSViewRepresentable {
         nsView.onTap = onTap
         nsView.onLongPress = onLongPress
         nsView.onHoverChange = onHoverChange
+        nsView.onPressChange = onPressChange
+        nsView.onMiddleClick = onMiddleClick
         nsView.blocksContextMenuWhenNotEditing = blocksContextMenuWhenNotEditing
     }
 }
 
 extension View {
-    /// A short tap does `onTap` normally; holding past 0.45s enters edit
+    /// `pressID` is what `WindowManager.pressedIconID` is set to while this
+    /// icon is held down (the button view compares it to draw the pressed
+    /// look). A short tap does `onTap` normally; holding past 0.45s enters edit
     /// mode; dragging while already editing reorders (see `PressAndHoldView`).
     /// A left tap does nothing while already editing — changing an icon's
     /// picture is a right-click action instead (see each button view's own
@@ -269,7 +302,7 @@ extension View {
     /// icon's own frame into `WindowManager.iconFrames` (see
     /// `reportsIconFrame`), so every other icon's own drag can find it as a
     /// possible target.
-    func iconPressAndHold(windowManager: WindowManager, bundleIdentifier: String?, onTap: @escaping () -> Void, blocksContextMenuWhenNotEditing: Bool = false, onHoverChange: @escaping (Bool) -> Void = { _ in }) -> some View {
+    func iconPressAndHold(windowManager: WindowManager, bundleIdentifier: String?, pressID: String, onMiddleClick: (() -> Void)? = nil, onTap: @escaping () -> Void, blocksContextMenuWhenNotEditing: Bool = false, onHoverChange: @escaping (Bool) -> Void = { _ in }) -> some View {
         self
             .reportsIconFrame(bundleIdentifier: bundleIdentifier, windowManager: windowManager)
             .overlay(
@@ -284,6 +317,16 @@ extension View {
                         windowManager.isEditingIcons = true
                     },
                     onHoverChange: onHoverChange,
+                    onPressChange: { pressed in
+                        if pressed {
+                            windowManager.pressedIconID = pressID
+                        } else if windowManager.pressedIconID == pressID {
+                            windowManager.pressedIconID = nil
+                        }
+                    },
+                    onMiddleClick: onMiddleClick.map { action in
+                        { if !windowManager.isEditingIcons { action() } }
+                    },
                     blocksContextMenuWhenNotEditing: blocksContextMenuWhenNotEditing
                 )
             )
@@ -295,18 +338,28 @@ extension View {
     /// already uses for `groupButtonFrames`, just covering every icon
     /// instead of only grouped ones.
     func reportsIconFrame(bundleIdentifier: String?, windowManager: WindowManager) -> some View {
-        background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear {
-                        guard let bundleIdentifier else { return }
-                        windowManager.iconFrames[bundleIdentifier] = geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))
-                    }
-                    .onChange(of: geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))) { _, newValue in
-                        guard let bundleIdentifier else { return }
-                        windowManager.iconFrames[bundleIdentifier] = newValue
-                    }
-            }
-        )
+        background(IconFrameReporter(bundleIdentifier: bundleIdentifier, windowManager: windowManager))
+    }
+}
+
+/// Reads the bar it's in from the environment, which a bare `View`
+/// extension can't — hence its own small view.
+private struct IconFrameReporter: View {
+    let bundleIdentifier: String?
+    let windowManager: WindowManager
+    @Environment(\.barID) private var barID
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear {
+                    guard let bundleIdentifier else { return }
+                    windowManager.iconFrames[BarFrames.key(barID, bundleIdentifier)] = geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))
+                }
+                .onChange(of: geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))) { _, newValue in
+                    guard let bundleIdentifier else { return }
+                    windowManager.iconFrames[BarFrames.key(barID, bundleIdentifier)] = newValue
+                }
+        }
     }
 }

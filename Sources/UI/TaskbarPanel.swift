@@ -8,8 +8,25 @@ import SwiftUI
 final class TaskbarPanel: NSPanel {
     private let themeStore: ThemeStore
     private let windowManager: WindowManager
-    private let startMenuPanel: StartMenuPanel
+    /// Only the main bar owns the start menu's window — the others just
+    /// ask it to open on their own screen (see `StartMenuState.anchorScreen`).
+    private let startMenuPanel: StartMenuPanel?
     private let startMenuState: StartMenuState
+    /// Which screen this bar sits on (`nil`: the Dock's own, the main one).
+    private let displayID: CGDirectDisplayID?
+    let barID: String
+    var isPrimary: Bool { displayID == nil }
+
+    /// This bar's screen — looked up fresh every time, since displays come
+    /// and go.
+    var barScreen: NSScreen? {
+        Self.screen(for: displayID)
+    }
+
+    private static func screen(for displayID: CGDirectDisplayID?) -> NSScreen? {
+        guard let displayID else { return DockController.dockScreen }
+        return NSScreen.screens.first { $0.displayID == displayID }
+    }
     private let groupHoverPanel: GroupHoverPanel
 
     // MARK: Auto-hide (Windows-style: retract off-screen except a thin
@@ -26,28 +43,35 @@ final class TaskbarPanel: NSPanel {
         appDiscovery: AppDiscovery,
         permissions: PermissionsManager,
         startMenuState: StartMenuState,
+        displayID: CGDirectDisplayID? = nil,
         onMinimizeAll: @escaping () -> Void
     ) {
         self.themeStore = themeStore
         self.windowManager = windowManager
         self.startMenuState = startMenuState
-        self.groupHoverPanel = GroupHoverPanel(windowManager: windowManager)
-        let screenFrame = Self.frame(forHeight: themeStore.effectivePanelHeight)
+        self.displayID = displayID
+        self.barID = displayID.map { "display-\($0)" } ?? "primary"
+        self.groupHoverPanel = GroupHoverPanel(windowManager: windowManager, barID: displayID.map { "display-\($0)" } ?? "primary")
+        let screenFrame = Self.frame(on: Self.screen(for: displayID), height: themeStore.effectivePanelHeight)
 
         // Owns the start menu's own real window (see `StartMenuPanel`) and
         // shows/hides it whenever `startMenuState.isPresented` changes —
         // it used to be a SwiftUI `.popover` attached to the start button,
         // but a popover can't be resized by the user, which is exactly
         // what's wanted here.
-        let startMenuPanel = StartMenuPanel(
-            themeStore: themeStore,
-            windowManager: windowManager,
-            appDiscovery: appDiscovery,
-            state: startMenuState
-        )
-        self.startMenuPanel = startMenuPanel
-        startMenuState.onPresentationChange = { [weak startMenuPanel] _ in
-            startMenuPanel?.syncVisibility()
+        if displayID == nil {
+            let startMenuPanel = StartMenuPanel(
+                themeStore: themeStore,
+                windowManager: windowManager,
+                appDiscovery: appDiscovery,
+                state: startMenuState
+            )
+            self.startMenuPanel = startMenuPanel
+            startMenuState.onPresentationChange = { [weak startMenuPanel] _ in
+                startMenuPanel?.syncVisibility()
+            }
+        } else {
+            self.startMenuPanel = nil
         }
 
         super.init(
@@ -72,23 +96,35 @@ final class TaskbarPanel: NSPanel {
             windowManager: windowManager,
             permissions: permissions,
             onMinimizeAll: onMinimizeAll,
-            startMenuState: startMenuState
+            startMenuState: startMenuState,
+            barID: barID,
+            displayID: displayID
         )
 
         let container = TaskbarContainerView(frame: NSRect(origin: .zero, size: screenFrame.size))
         container.autoresizesSubviews = true
         container.themeStore = themeStore
         container.windowManager = windowManager
+        container.barID = barID
 
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = container.bounds
         hostingView.autoresizingMask = [.width, .height]
         container.addSubview(hostingView)
 
-        // No drag-to-resize handle on the bar itself any more — bar height
-        // is a Settings-only control now (the "Bar Size" slider, still
-        // backed by this same `panelHeightOverride`), not something a
-        // stray drag on the top edge should be able to change by accident.
+        // Dragging the top edge resizes the bar, but only while icon edit
+        // mode is on (see `BarResizeStripView`) — never by accident.
+        let strip = BarResizeStripView(frame: NSRect(
+            x: 0,
+            y: container.bounds.height - BarResizeStripView.thickness,
+            width: container.bounds.width,
+            height: BarResizeStripView.thickness
+        ))
+        strip.autoresizingMask = [.width, .minYMargin]
+        strip.windowManager = windowManager
+        strip.themeStore = themeStore
+        container.addSubview(strip)
+        container.resizeStrip = strip
         contentView = container
 
         NotificationCenter.default.addObserver(
@@ -128,7 +164,7 @@ final class TaskbarPanel: NSPanel {
             // The start menu doesn't make sense floating on its own once
             // the bar it's anchored to is gone — same for the group-hover
             // popup, which anchors to a button on the (now gone) bar.
-            startMenuPanel.syncVisibilityAsDismissed()
+            startMenuPanel?.syncVisibilityAsDismissed()
             groupHoverPanel.orderOut(nil)
         }
     }
@@ -138,13 +174,13 @@ final class TaskbarPanel: NSPanel {
     }
 
     private func reposition() {
-        setFrame(isRetracted ? retractedFrame() : Self.frame(forHeight: themeStore.effectivePanelHeight), display: true)
+        setFrame(isRetracted ? retractedFrame() : Self.frame(on: barScreen, height: themeStore.effectivePanelHeight), display: true)
     }
 
     private func syncGroupHoverPanel() {
         guard var tokens = themeStore.activeTheme?.tokens else { return }
         tokens.panel.height = themeStore.effectivePanelHeight
-        groupHoverPanel.sync(tokens: tokens, panelHeight: tokens.panel.height)
+        groupHoverPanel.sync(tokens: tokens, panelHeight: tokens.panel.height, previewsEnabled: themeStore.windowPreviewsEnabled, screen: barScreen)
     }
 
     // MARK: - Auto-hide
@@ -169,7 +205,7 @@ final class TaskbarPanel: NSPanel {
             if isRetracted { reveal() }
             return
         }
-        guard let screen = DockController.dockScreen else { return }
+        guard let screen = barScreen else { return }
         let mouse = NSEvent.mouseLocation
         // The "hot edge": the very bottom row of pixels on the bar's own
         // screen, the same trigger Windows' own auto-hidden taskbar uses.
@@ -204,7 +240,7 @@ final class TaskbarPanel: NSPanel {
         isRetracted = false
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
-            self.animator().setFrame(Self.frame(forHeight: self.themeStore.effectivePanelHeight), display: true)
+            self.animator().setFrame(Self.frame(on: self.barScreen, height: self.themeStore.effectivePanelHeight), display: true)
         }
     }
 
@@ -212,13 +248,13 @@ final class TaskbarPanel: NSPanel {
     /// peeks above the screen's bottom edge — that sliver, and the hot
     /// edge itself, are what a hover reveals it again from.
     private func retractedFrame() -> NSRect {
-        var retracted = Self.frame(forHeight: themeStore.effectivePanelHeight)
+        var retracted = Self.frame(on: barScreen, height: themeStore.effectivePanelHeight)
         retracted.origin.y -= (retracted.height - Self.autoHideRevealSliver)
         return retracted
     }
 
-    private static func frame(forHeight height: CGFloat) -> NSRect {
-        guard let screen = DockController.dockScreen else {
+    private static func frame(on screen: NSScreen?, height: CGFloat) -> NSRect {
+        guard let screen else {
             return NSRect(x: 0, y: 0, width: 1440, height: height)
         }
         return NSRect(x: screen.frame.minX, y: screen.frame.minY, width: screen.frame.width, height: height)

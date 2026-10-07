@@ -62,7 +62,10 @@ struct Windows7StartMenuView: View {
     }
 
     private func launchSelected() {
-        guard displayedApps.indices.contains(state.selectedIndex) else { return }
+        guard displayedApps.indices.contains(state.selectedIndex) else {
+            SearchExtras.runPrimary(query: state.query, onDone: onLaunch)
+            return
+        }
         launch(displayedApps[state.selectedIndex])
     }
 
@@ -76,6 +79,10 @@ struct Windows7StartMenuView: View {
                 let apps = displayedApps
                 let loops = LoopList.shouldLoop(enabled: infiniteScroll, searching: !state.query.isEmpty, count: apps.count, columns: 1, visibleRows: 14)
                 ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: apps.map(\.id), state: state, loops: loops) {
+                    VStack(spacing: 6) {
+                    if !state.query.isEmpty {
+                        SearchExtrasView(query: state.query, tokens: tokens, onDone: onLaunch)
+                    }
                     LazyVStack(spacing: 1) {
                         ForEach(LoopList.entries(apps, columns: 1, loops: loops)) { entry in
                             if let app = entry.item {
@@ -95,6 +102,7 @@ struct Windows7StartMenuView: View {
                         }
                     }
                     .scrollTargetLayout()
+                    }
                     .padding(6)
                 }
                 .onChange(of: state.selectedIndex) { _, newIndex in

@@ -25,7 +25,7 @@ final class StartMenuPanel: NSPanel {
         self.windowManager = windowManager
         self.appDiscovery = appDiscovery
         self.state = state
-        let initialFrame = Self.frame(themeStore: themeStore)
+        let initialFrame = Self.frame(themeStore: themeStore, screen: nil)
 
         super.init(
             contentRect: initialFrame,
@@ -194,11 +194,11 @@ final class StartMenuPanel: NSPanel {
     }
 
     private func reposition() {
-        setFrame(Self.frame(themeStore: themeStore), display: true)
+        setFrame(Self.frame(themeStore: themeStore, screen: state.anchorScreen), display: true)
     }
 
-    private static func frame(themeStore: ThemeStore) -> NSRect {
-        guard let screen = DockController.dockScreen else {
+    private static func frame(themeStore: ThemeStore, screen anchor: NSScreen?) -> NSRect {
+        guard let screen = anchor ?? DockController.dockScreen else {
             return NSRect(origin: .zero, size: themeStore.effectiveStartMenuSize)
         }
         // Launchpad covers the whole screen, like the real thing — not

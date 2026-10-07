@@ -19,6 +19,21 @@ struct TaskbarView: View {
     let permissions: PermissionsManager
     let onMinimizeAll: () -> Void
     let startMenuState: StartMenuState
+    /// Which bar this is (`TaskbarPanel.barID`) and, for every bar but the
+    /// main one, which display it sits on.
+    var barID = "primary"
+    var displayID: CGDirectDisplayID?
+
+    private var barScreen: NSScreen? {
+        displayID.flatMap { id in NSScreen.screens.first { $0.displayID == id } } ?? DockController.dockScreen
+    }
+
+    /// What this bar lists when there's a bar per screen (see
+    /// `WindowManager.BarScope`); `nil` when there's just the one.
+    private var windowScope: WindowManager.BarScope? {
+        guard themeStore.barOnAllScreensEnabled, NSScreen.screens.count > 1 else { return nil }
+        return WindowManager.BarScope(displayID: barScreen?.displayID, isPrimary: displayID == nil)
+    }
 
     var body: some View {
         Group {
@@ -30,6 +45,7 @@ struct TaskbarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .environment(\.barID, barID)
     }
 
     private func content(for originalTheme: Theme) -> some View {
@@ -57,6 +73,28 @@ struct TaskbarView: View {
             theme.layout.zones.left.removeAll { $0 == "clock" }
             theme.layout.zones.center.removeAll { $0 == "clock" }
             theme.layout.zones.right.removeAll { $0 == "clock" }
+        }
+        // The notification area sits right before the clock (or opens the
+        // right zone when the clock is off).
+        if themeStore.weatherEnabled && !themeStore.weatherOnRight { theme.layout.zones.left.append("weather") }
+        // Right before the clock (or opening the right zone when the clock
+        // is off): media, clipboard, screenshot, then the notification area.
+        var beforeClock: [String] = []
+        if themeStore.weatherEnabled && themeStore.weatherOnRight { beforeClock.append("weather") }
+        if themeStore.mediaPlayerEnabled { beforeClock.append("media") }
+        if themeStore.clipboardHistoryEnabled { beforeClock.append("clipboard") }
+        if themeStore.screenshotButtonEnabled { beforeClock.append("screenshot") }
+        if themeStore.systemTrayEnabled || themeStore.quickSettingsEnabled { beforeClock.append("tray") }
+        if !beforeClock.isEmpty {
+            if let index = theme.layout.zones.right.firstIndex(of: "clock") {
+                theme.layout.zones.right.insert(contentsOf: beforeClock, at: index)
+            } else if let index = theme.layout.zones.center.firstIndex(of: "clock") {
+                theme.layout.zones.center.insert(contentsOf: beforeClock, at: index)
+            } else if let index = theme.layout.zones.left.firstIndex(of: "clock") {
+                theme.layout.zones.left.insert(contentsOf: beforeClock, at: index)
+            } else {
+                theme.layout.zones.right.insert(contentsOf: beforeClock, at: 0)
+            }
         }
         let tokens = theme.tokens
 
@@ -137,6 +175,19 @@ struct TaskbarView: View {
             // Named so `startButton(theme:)` can publish its own frame in
             // this same space — see `StartMenuState.startButtonFrame`.
             .coordinateSpace(name: Self.taskbarRootCoordinateSpace)
+            // Hint that the top edge can be dragged to resize the bar while
+            // icons are being edited (the drag itself is `BarResizeStripView`).
+            .overlay(alignment: .top) {
+                if windowManager.isEditingIcons {
+                    Capsule()
+                        .fill(Color(hex: tokens.colors.textSecondary).opacity(0.6))
+                        .frame(width: 40, height: 3)
+                        .padding(.top, 2)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: windowManager.isEditingIcons)
         }
         .frame(height: tokens.panel.height)
         // Plain-style buttons (start, minimize-all, trash) still pick up
@@ -190,6 +241,12 @@ struct TaskbarView: View {
                 // Matches the actual render: a vertical strip half as wide
                 // as it used to be.
                 width += max(6, (tokens.panel.height - 8) / 2)
+            case "weather":
+                width += 70
+            case "media", "clipboard", "screenshot":
+                width += 32
+            case "tray":
+                width += 74
             case "clock":
                 width += 64 // rough "HH:mm" + padding estimate; exact width depends on font metrics
             case "trash":
@@ -275,8 +332,22 @@ struct TaskbarView: View {
             minimizeAllButton(theme: theme)
         case "trash":
             trashButton(theme: theme)
+        case "weather":
+            WeatherWidget(tokens: tokens, themeStore: themeStore)
+        case "media":
+            MediaWidget(tokens: tokens, themeStore: themeStore)
+        case "clipboard":
+            ClipboardWidget(tokens: tokens, themeStore: themeStore)
+        case "screenshot":
+            ScreenshotWidget(tokens: tokens)
+        case "tray":
+            SystemTrayView(tokens: tokens, themeStore: themeStore)
         case "clock":
             clockView(tokens: tokens)
+                .contentShape(Rectangle())
+                .opensBarPopup("calendar", themeStore: themeStore) {
+                    CalendarPopupView(tokens: tokens, extraTimeZones: themeStore.extraTimeZones)
+                }
         default:
             // "task-list" only makes sense in the flexible center zone
             // (see `centerZone`), which measures the width it has to work
@@ -288,7 +359,7 @@ struct TaskbarView: View {
     private func startButton(theme: Theme) -> some View {
         let tokens = theme.tokens
         return Button {
-            startMenuState.toggleOrHandOff(style: themeStore.startMenuStyle)
+            startMenuState.toggleOrHandOff(style: themeStore.startMenuStyle, screen: barScreen)
         } label: {
             HStack(spacing: 6) {
                 // No filled background: just the logo, sitting directly on
@@ -302,12 +373,13 @@ struct TaskbarView: View {
                 // except for a theme that explicitly asks to fill the
                 // panel's whole height instead (Windows 7's Start orb,
                 // drawn corner-to-corner in the real taskbar).
-                ThemeIcon(
-                    url: theme.iconURL("start-button"),
-                    colorHex: tokens.colors.textPrimary,
-                    size: tokens.startButton.fillHeight == true ? tokens.panel.height : tokens.taskbarIconSize
-                )
-                .hoverLift(isHovered: startMenuState.isStartButtonHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom, disablesHitTesting: false)
+                StartButtonLift(isHovered: startMenuState.isStartButtonHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom) {
+                    ThemeIcon(
+                        url: theme.iconURL("start-button"),
+                        colorHex: tokens.colors.textPrimary,
+                        size: tokens.startButton.fillHeight == true ? tokens.panel.height : tokens.taskbarIconSize
+                    )
+                }
                 if tokens.startButton.showLabel {
                     Text(tokens.startButton.label)
                         .font(.system(size: tokens.typography.fontSize, weight: .medium))
@@ -322,7 +394,7 @@ struct TaskbarView: View {
             .padding(.leading, tokens.spacing.edgePadding)
             .frame(height: tokens.panel.height)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressReportingButtonStyle())
         .contentShape(Rectangle())
         .onHover { isHovering in
             startMenuState.isStartButtonHovered = isHovering
@@ -338,9 +410,9 @@ struct TaskbarView: View {
         .background(
             GeometryReader { geo in
                 Color.clear
-                    .onAppear { startMenuState.startButtonFrame = geo.frame(in: .named(Self.taskbarRootCoordinateSpace)) }
+                    .onAppear { startMenuState.startButtonFrames[barID] = geo.frame(in: .named(Self.taskbarRootCoordinateSpace)) }
                     .onChange(of: geo.frame(in: .named(Self.taskbarRootCoordinateSpace))) { _, newValue in
-                        startMenuState.startButtonFrame = newValue
+                        startMenuState.startButtonFrames[barID] = newValue
                     }
             }
         )
@@ -356,11 +428,23 @@ struct TaskbarView: View {
     /// this same space too (see `WindowManager.groupButtonFrames`).
     static let taskbarRootCoordinateSpace = "taskbarRoot"
 
+    /// The task list's entries, combined per the grouping setting. With
+    /// "when the bar is full", each window keeps its own button for as long
+    /// as they all fit at their smallest (an icon, plus a name when names are
+    /// on); past that, same-app windows combine.
+    private func taskEntries(grouping: TaskGroupingMode, isIconOnly: Bool, iconOnlyWidth: CGFloat, spacing: CGFloat, availableWidth: CGFloat) -> [TaskbarEntry] {
+        let entries = windowManager.entries(for: windowScope, grouped: grouping != .never)
+        guard grouping == .whenFull else { return entries }
+        let separate = windowManager.entries(for: windowScope, grouped: false)
+        let smallest = (isIconOnly ? iconOnlyWidth : iconOnlyWidth + 50) + spacing
+        return CGFloat(separate.count) * smallest <= availableWidth ? separate : entries
+    }
+
     @ViewBuilder
     private func taskList(theme: Theme, availableWidth: CGFloat) -> some View {
         let tokens = theme.tokens
-        let entries = windowManager.entries
         let isIconOnly = tokens.taskButton.displayStyle == "iconOnly"
+        let groupingMode = themeStore.groupingMode
 
         // Buttons shrink towards an icon-only floor as more windows compete
         // for the same space, and cap at the theme's maxWidth when there's
@@ -374,6 +458,7 @@ struct TaskbarView: View {
         // throwing off both the icon's own centering and the active-window
         // underline (which spans this same width) relative to it.
         let iconOnlyWidth = max(24, tokens.taskbarIconSize + tokens.effectiveTaskbarEdgePadding * 2)
+        let entries = taskEntries(grouping: groupingMode, isIconOnly: isIconOnly, iconOnlyWidth: iconOnlyWidth, spacing: tokens.effectiveTaskbarIconSpacing, availableWidth: availableWidth)
         let itemCount = max(1, entries.count)
         let perItemBudget = availableWidth / CGFloat(itemCount)
         let itemWidth = isIconOnly ? iconOnlyWidth : min(tokens.taskButton.maxWidth, max(iconOnlyWidth, perItemBudget))
@@ -443,9 +528,13 @@ struct TaskbarView: View {
                 }
                 .buttonStyle(.plain)
             }
-            if windowManager.isEditingIcons {
-                doneEditingIconsButton(tokens: tokens)
+            Group {
+                if windowManager.isEditingIcons {
+                    doneEditingIconsButton(tokens: tokens)
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                }
             }
+            .animation(.easeOut(duration: 0.2), value: windowManager.isEditingIcons)
         }
     }
 
@@ -472,20 +561,33 @@ struct TaskbarView: View {
     // vertical strip, the way Windows 7's own "show desktop" sliver at the
     // far right of the taskbar looks (see the reference screenshot), in
     // place of the icon-in-a-square button used before.
-    private static let minimizeAllStrokeWidth: CGFloat = 1
 
     private func minimizeAllButton(theme: Theme) -> some View {
         let tokens = theme.tokens
         let width = max(6, (tokens.panel.height - 8) / 2)
-        return Button(action: onMinimizeAll) {
+        return Button(action: {
+            // Apps hidden by the peek come back first, so the windows being
+            // minimized are the real ones.
+            windowManager.endDesktopPeek(restoringFocus: false)
+            onMinimizeAll()
+        }) {
             GlassButtonBackground(tokens: tokens, liquidGlassEnabled: themeStore.liquidGlassEnabled, liquidGlassIntensity: themeStore.liquidGlassIntensity)
                 .frame(width: width, height: tokens.panel.height)
-                .overlay(
-                    Rectangle().strokeBorder(Color(hex: tokens.colors.textSecondary).opacity(0.5), lineWidth: Self.minimizeAllStrokeWidth)
-                )
+                // The same border as the bar's own top edge (`PanelBackground`),
+                // so the button's top line continues the bar's. A theme with
+                // no bar border keeps a thin neutral outline instead, so the
+                // strip stays visible.
+                .overlay {
+                    if tokens.panel.borderWidth > 0 {
+                        Rectangle().strokeBorder(Color(hex: tokens.panel.borderColor), lineWidth: tokens.panel.borderWidth)
+                    } else {
+                        Rectangle().strokeBorder(Color(hex: tokens.colors.textSecondary).opacity(0.5), lineWidth: 1)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .onHover { hovering in windowManager.setDesktopPeek(hovering) }
         .help(L("help.minimize_all"))
         // Same idea as macOS's "Active Corner → Desktop": dragging files
         // over this button briefly shows the desktop to drop them onto.
@@ -497,7 +599,7 @@ struct TaskbarView: View {
         return Button {
             NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash"))
         } label: {
-            ThemeIcon(url: theme.iconURL("trash"), colorHex: tokens.colors.textPrimary, size: max(10, tokens.panel.height - 22))
+            TrashIcon(url: theme.iconURL("trash"), colorHex: tokens.colors.textPrimary, size: max(10, tokens.panel.height - 22), isOpen: windowManager.isTrashOpen)
                 .frame(width: tokens.panel.height - 8, height: tokens.panel.height - 8)
                 .background(GlassButtonBackground(tokens: tokens, liquidGlassEnabled: themeStore.liquidGlassEnabled, liquidGlassIntensity: themeStore.liquidGlassIntensity, cornerRadius: tokens.taskButton.cornerRadius))
                 .clipShape(RoundedRectangle(cornerRadius: tokens.taskButton.cornerRadius))

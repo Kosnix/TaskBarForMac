@@ -75,3 +75,34 @@ struct ThemeIcon: View {
         .frame(width: size, height: size)
     }
 }
+
+/// The trash icon, with its lid lifting while the Trash is open (see
+/// `WindowManager.isTrashOpen`) and dropping back when it's closed. Themes
+/// only ship one closed-trash drawing, so the lid is the same icon clipped
+/// to its top part and hinged open on the left, instead of needing a second
+/// drawing per theme.
+struct TrashIcon: View {
+    let url: URL?
+    let colorHex: String
+    var size: CGFloat = 16
+    let isOpen: Bool
+
+    private static let lidFraction: CGFloat = 0.3
+
+    var body: some View {
+        let icon = ThemeIcon(url: url, colorHex: colorHex, size: size)
+        ZStack {
+            icon.mask(alignment: .bottom) {
+                Rectangle().frame(height: size * (1 - Self.lidFraction))
+            }
+            icon
+                .mask(alignment: .top) {
+                    Rectangle().frame(height: size * Self.lidFraction)
+                }
+                .rotationEffect(.degrees(isOpen ? -24 : 0), anchor: UnitPoint(x: 0.2, y: Self.lidFraction))
+                .offset(y: isOpen ? -size * 0.04 : 0)
+        }
+        .frame(width: size, height: size)
+        .animation(.spring(response: 0.3, dampingFraction: 0.65), value: isOpen)
+    }
+}

@@ -42,8 +42,13 @@ struct Windows11StartMenuView: View {
             searchField
             ScrollViewReader { proxy in
                 ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: displayedApps.map(\.id), indicators: .never, state: state, loops: loopsEnabled) {
-                    appGrid
-                        .padding(20)
+                    VStack(spacing: 12) {
+                        if !state.query.isEmpty {
+                            SearchExtrasView(query: state.query, tokens: tokens, onDone: onLaunch)
+                        }
+                        appGrid
+                    }
+                    .padding(20)
                 }
                 .onChange(of: state.selectedIndex) { _, newIndex in
                     guard displayedApps.indices.contains(newIndex) else { return }
@@ -51,6 +56,9 @@ struct Windows11StartMenuView: View {
                         proxy.scrollTo(LoopList.id(copy: LoopList.middleCopy, slot: newIndex), anchor: .center)
                     }
                 }
+            }
+            if state.query.isEmpty {
+                RecommendedFilesView(tokens: tokens, onDone: onLaunch)
             }
             Divider()
             footer
@@ -84,7 +92,10 @@ struct Windows11StartMenuView: View {
     }
 
     private func launchSelected() {
-        guard displayedApps.indices.contains(state.selectedIndex) else { return }
+        guard displayedApps.indices.contains(state.selectedIndex) else {
+            SearchExtras.runPrimary(query: state.query, onDone: onLaunch)
+            return
+        }
         launch(displayedApps[state.selectedIndex])
     }
 

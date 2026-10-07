@@ -46,7 +46,10 @@ final class StartMenuState {
     /// background) — kept live so `startWatchingForOutsideClicks` can tell
     /// a click *on the button* apart from a click anywhere else on the bar,
     /// without needing to know about SwiftUI at all itself.
-    var startButtonFrame: CGRect = .zero
+    var startButtonFrames: [String: CGRect] = [:]
+    /// The screen the menu opens on: the one whose start button (or whose
+    /// shortcut press) opened it. `nil` means the main screen.
+    var anchorScreen: NSScreen?
 
     /// Whether the mouse is currently over the start button — drives its
     /// own `.hoverLift` (`TaskbarView.startButton(theme:)`), matching every
@@ -65,7 +68,11 @@ final class StartMenuState {
     /// `.realSpotlight` and `.nativeApps` don't draw any menu of their own,
     /// they hand off to the real system Spotlight / Apps menu and leave
     /// this app's own panel closed.
-    func toggleOrHandOff(style: StartMenuStyle) {
+    func toggleOrHandOff(style: StartMenuStyle, screen: NSScreen? = nil) {
+        // The screen is set before presenting so the panel opens there; for
+        // an already-open menu it's what a click on another bar's button
+        // moves it to — closing it instead is the plain toggle below.
+        if !isPresented { anchorScreen = screen }
         switch style {
         case .realSpotlight: SpotlightTrigger.open()
         case .nativeApps: NativeAppsTrigger.toggle()
@@ -91,7 +98,12 @@ final class StartMenuState {
     /// specifically — separate from `WindowManager.isEditingIcons` (which
     /// is about the *taskbar's* pinned-icon order, a completely different
     /// list), even though it reuses the exact same `.wiggle()` visual.
-    var isEditingLaunchpad = false
+    var isEditingLaunchpad = false {
+        didSet { editModeChangedAt = Date() }
+    }
+
+    /// When `isEditingLaunchpad` last flipped — what the wiggle eases in/out from.
+    @ObservationIgnored private(set) var editModeChangedAt = Date.distantPast
 
     /// Which folder (by its `LaunchpadItem.id`) is currently expanded, if
     /// any — `nil` means the main grid.
@@ -189,7 +201,7 @@ final class StartMenuState {
                 // SwiftUI's top-left-origin, Y-down space — flipping Y by
                 // the window's own height converts between the two.
                 let pointInSwiftUISpace = CGPoint(x: event.locationInWindow.x, y: windowHeight - event.locationInWindow.y)
-                if self.startButtonFrame.contains(pointInSwiftUISpace) {
+                if let barID = (event.window as? TaskbarPanel)?.barID, self.startButtonFrames[barID]?.contains(pointInSwiftUISpace) == true {
                     return event
                 }
             }

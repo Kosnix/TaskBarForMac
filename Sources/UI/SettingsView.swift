@@ -198,7 +198,54 @@ struct SettingsView: View {
                     Text(L("display.icon_only")).tag("iconOnly")
                 }
                 .pickerStyle(.segmented)
+                Picker(L("settings.grouping"), selection: $themeStore.groupingMode) {
+                    Text(L("settings.grouping.always")).tag(TaskGroupingMode.always)
+                    Text(L("settings.grouping.when_full")).tag(TaskGroupingMode.whenFull)
+                    Text(L("settings.grouping.never")).tag(TaskGroupingMode.never)
+                }
                 Toggle(L("menu.auto_hide"), isOn: $themeStore.autoHideEnabled)
+            }
+
+            Section(L("settings.section.features")) {
+                Toggle(L("settings.window_previews"), isOn: $themeStore.windowPreviewsEnabled)
+                    .onChange(of: themeStore.windowPreviewsEnabled) { _, enabled in
+                        if enabled { WindowThumbnailStore.shared.requestAccessIfNeeded() }
+                    }
+                if themeStore.windowPreviewsEnabled && !WindowThumbnailStore.shared.isAuthorized {
+                    HStack {
+                        Text(L("settings.screen_recording_needed"))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button(L("settings.open_system_settings")) {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    }
+                }
+                Toggle(L("settings.weather"), isOn: $themeStore.weatherEnabled)
+                if themeStore.weatherEnabled {
+                    TextField(L("settings.weather_city"), text: $themeStore.weatherCity, prompt: Text("Paris"))
+                    Picker(L("settings.weather_position"), selection: $themeStore.weatherOnRight) {
+                        Text(L("settings.weather_position.left")).tag(false)
+                        Text(L("settings.weather_position.right")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                TextField(L("settings.time_zones"), text: $themeStore.extraTimeZones, prompt: Text("Asia/Tokyo, America/New_York"))
+                Toggle(L("settings.media_player"), isOn: $themeStore.mediaPlayerEnabled)
+                Toggle(L("settings.clipboard_history"), isOn: $themeStore.clipboardHistoryEnabled)
+                Toggle(L("settings.screenshot_button"), isOn: $themeStore.screenshotButtonEnabled)
+                Toggle(L("settings.system_tray"), isOn: $themeStore.systemTrayEnabled)
+                Toggle(L("settings.quick_settings"), isOn: $themeStore.quickSettingsEnabled)
+                if themeStore.quickSettingsEnabled {
+                    TextField(L("settings.focus_shortcut"), text: $themeStore.focusShortcutName, prompt: Text(L("settings.focus_shortcut.prompt")))
+                }
+                Toggle(L("settings.notification_badges"), isOn: $themeStore.notificationBadgesEnabled)
+                Toggle(L("settings.all_screens"), isOn: $themeStore.barOnAllScreensEnabled)
+                Toggle(L("settings.alt_tab"), isOn: $themeStore.altTabEnabled)
+                Toggle(L("settings.window_snap"), isOn: $themeStore.windowSnapEnabled)
             }
 
             Section(L("settings.section.start_menu")) {

@@ -30,16 +30,20 @@ struct TaskButtonView: View {
     var body: some View {
         HStack(spacing: 6) {
             if let icon = windowManager.resolvedIcon(bundleIdentifier: window.bundleIdentifier, fallback: window.appIcon) {
+                AttentionPulse(isActive: window.bundleIdentifier.map { AppStatusStore.shared.attention.contains($0) } ?? false) { pulse in
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
-                    .wiggle(isActive: windowManager.isEditingIcons, seed: window.id.hashValue)
-                    .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
+                    .wiggle(isActive: windowManager.isEditingIcons, since: windowManager.editModeChangedAt, seed: window.id.hashValue)
+                    .hoverLift(isHovered: isHovered || pulse, zoomRatio: tokens.effectiveTaskbarIconHoverZoom, isPressed: windowManager.pressedIconID == window.id)
                     // A single open window needs no indicator at all — only
                     // once it's minimized is there anything worth flagging,
                     // shown as "1" in the same badge style
                     // `GroupedTaskButtonView` uses for its own window count.
                     .taskWindowCountBadge(window.isMinimized ? .empty : nil, accentColor: Color(hex: tokens.colors.accent))
+                    .appNotificationBadge(window.bundleIdentifier.flatMap { AppStatusStore.shared.badges[$0] })
+                    .appProgressBar(window.bundleIdentifier.flatMap { AppStatusStore.shared.progress[$0] }, accentColor: Color(hex: tokens.colors.accent))
+                }
             }
             if showLabel {
                 Text(window.title)
@@ -66,6 +70,7 @@ struct TaskButtonView: View {
             // minimizing/raising in this mode: jiggling is for
             // rearranging/re-skinning icons, not controlling windows.
             if !windowManager.isEditingIcons {
+                JumpListMenu(bundleIdentifier: window.bundleIdentifier, appURL: NSRunningApplication(processIdentifier: window.pid)?.bundleURL, pid: window.pid)
                 Button(window.isMinimized ? L("window.restore") : L("window.minimize")) {
                     windowManager.toggleMinimize(window)
                 }
@@ -112,8 +117,15 @@ struct TaskButtonView: View {
         // `.onDrop` target especially) to actually receive left-clicks —
         // see `IconPressGesture.swift`'s doc comment for why an earlier
         // ordering silently ate every click before it ever reached this.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: window.bundleIdentifier, onTap: onTap) { isHovering in
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: window.bundleIdentifier, pressID: window.id, onMiddleClick: { JumpListStore.shared.openNewWindow(pid: window.pid) }, onTap: onTap) { isHovering in
             windowManager.hoveredWindowID = isHovering ? window.id : (windowManager.hoveredWindowID == window.id ? nil : windowManager.hoveredWindowID)
+            // A single window gets a hover preview too (see `GroupHoverPanel`).
+            if let bundleIdentifier = window.bundleIdentifier {
+                windowManager.setGroupHovered(bundleIdentifier, hovering: isHovering)
+                if isHovering {
+                    JumpListStore.shared.prefetch(bundleIdentifier: bundleIdentifier, appURL: NSRunningApplication(processIdentifier: window.pid)?.bundleURL, pid: window.pid)
+                }
+            }
         }
     }
 

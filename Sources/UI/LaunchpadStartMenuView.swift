@@ -70,7 +70,7 @@ struct LaunchpadStartMenuView: View {
     }
 
     private var metrics: Metrics {
-        Metrics(screenSize: DockController.dockScreen?.frame.size ?? CGSize(width: 1440, height: 900))
+        Metrics(screenSize: (state.anchorScreen ?? DockController.dockScreen)?.frame.size ?? CGSize(width: 1440, height: 900))
     }
 
     /// A drop point within this many points of a target cell's own center
@@ -242,8 +242,10 @@ struct LaunchpadStartMenuView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(Color.white.opacity(0.15), in: Capsule())
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
         }
+        .animation(.easeOut(duration: 0.2), value: state.isEditingLaunchpad)
     }
 
     private var searchField: some View {
@@ -433,7 +435,7 @@ struct LaunchpadStartMenuView: View {
             Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                 .resizable()
                 .frame(width: metrics.iconSize, height: metrics.iconSize)
-                .wiggle(isActive: state.isEditingLaunchpad, seed: app.id.hashValue)
+                .wiggle(isActive: state.isEditingLaunchpad, since: state.editModeChangedAt, seed: app.id.hashValue)
             Text(displayName(for: app))
                 .font(.system(size: 12))
                 .foregroundStyle(.white)
@@ -466,7 +468,7 @@ struct LaunchpadStartMenuView: View {
     private func folderCell(id: String, name: String, appIDs: [String]) -> some View {
         VStack(spacing: 8) {
             folderIcon(appIDs: appIDs)
-                .wiggle(isActive: state.isEditingLaunchpad, seed: id.hashValue)
+                .wiggle(isActive: state.isEditingLaunchpad, since: state.editModeChangedAt, seed: id.hashValue)
             Text(name)
                 .font(.system(size: 12))
                 .foregroundStyle(.white)
@@ -625,7 +627,7 @@ struct LaunchpadStartMenuView: View {
             Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                 .resizable()
                 .frame(width: metrics.iconSize * 0.72, height: metrics.iconSize * 0.72)
-                .wiggle(isActive: state.isEditingLaunchpad, seed: app.id.hashValue)
+                .wiggle(isActive: state.isEditingLaunchpad, since: state.editModeChangedAt, seed: app.id.hashValue)
             Text(displayName(for: app))
                 .font(.system(size: 11))
                 .foregroundStyle(.white)

@@ -23,6 +23,9 @@ struct AppWindow: Identifiable {
     var appName: String
     var appIcon: NSImage?
     var isMinimized: Bool
+    /// The display the window's center is on — only worked out when there's
+    /// more than one display (see `WindowManager.displayID(of:)`).
+    var displayID: CGDirectDisplayID? = nil
 }
 
 /// One slot in the taskbar's unified task list: a single running window, a
@@ -60,6 +63,29 @@ final class WindowManager {
     /// plain, macro-free SwiftUI views. See ShortcutsManager for why.
     var hoveredWindowID: String?
     var hoveredGroupID: String?
+    /// The bar the pointer is on (`TaskbarPanel.barID`) — the hover popup
+    /// belongs to that one, not to every bar showing the same app.
+    var activeBarID = "primary"
+    /// The thumbnail card the mouse is over in the hover preview strip.
+    var hoveredPreviewWindowID: String?
+
+    private static let trashFolderName: String = {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+        return (try? url.resourceValues(forKeys: [.localizedNameKey]).localizedName) ?? "Trash"
+    }()
+
+    /// Whether a Finder window showing the Trash is open (minimized or not)
+    /// — the taskbar's trash icon opens its lid while this is true. Finder
+    /// titles such a window with the Trash's localized name ("Trash",
+    /// "Corbeille", …).
+    var isTrashOpen: Bool {
+        windows.contains { $0.bundleIdentifier == "com.apple.finder" && $0.title == Self.trashFolderName }
+    }
+
+    /// The taskbar icon the mouse button is currently held down on (same id
+    /// scheme as `hoveredWindowID`/`hoveredGroupID`, see `iconPressAndHold`) —
+    /// it shrinks while pressed, like on Windows.
+    var pressedIconID: String?
 
     /// Each grouped task button's own frame, in `TaskbarView`'s shared
     /// `"taskbarRoot"` coordinate space — kept live so the hover window-list
@@ -94,10 +120,14 @@ final class WindowManager {
     /// in-memory preview until this flips back to `false`.
     var isEditingIcons = false {
         didSet {
+            editModeChangedAt = Date()
             guard oldValue == true, isEditingIcons == false else { return }
             commitPendingIconOrder()
         }
     }
+
+    /// When `isEditingIcons` last flipped — what the wiggle eases in/out from.
+    @ObservationIgnored private(set) var editModeChangedAt = Date.distantPast
 
     /// A live, in-memory-only reordering while dragging icons around in
     /// edit mode — every entry's bundle identifier, in the order being
@@ -244,28 +274,45 @@ final class WindowManager {
     /// Pinned launchers first (Dock order), each replaced by its window(s)
     /// once running (grouped under one icon when there's more than one);
     /// any other running window/group follows.
-    var entries: [TaskbarEntry] {
+    var entries: [TaskbarEntry] { entries(for: nil) }
+
+    /// Which windows one bar shows when there's a bar per screen: its own
+    /// screen's, plus — on the main bar only — minimized ones and any whose
+    /// screen couldn't be told, and the pinned launchers.
+    struct BarScope {
+        let displayID: CGDirectDisplayID?
+        let isPrimary: Bool
+    }
+
+    /// `nil` scope: everything, on one bar.
+    func entries(for scope: BarScope?, grouped: Bool = true) -> [TaskbarEntry] {
         var result: [TaskbarEntry] = []
         var consumedWindowIDs = Set<String>()
+        let windows = scope.map { scope in
+            self.windows.filter { window in
+                window.displayID == scope.displayID || (scope.isPrimary && (window.displayID == nil || window.isMinimized))
+            }
+        } ?? self.windows
 
-        for pinned in orderedPinnedApps {
+        for pinned in (scope?.isPrimary ?? true) ? orderedPinnedApps : [] {
             let matches = windows.filter { $0.bundleIdentifier != nil && $0.bundleIdentifier == pinned.bundleIdentifier }
             if matches.isEmpty {
                 result.append(.launcher(pinned))
             } else {
-                result.append(contentsOf: Self.groupedEntries(for: matches))
+                result.append(contentsOf: Self.groupedEntries(for: matches, grouped: grouped))
                 consumedWindowIDs.formUnion(matches.map(\.id))
             }
         }
 
         let remaining = windows.filter { !consumedWindowIDs.contains($0.id) }
-        result.append(contentsOf: Self.groupedEntries(for: remaining))
+        result.append(contentsOf: Self.groupedEntries(for: remaining, grouped: grouped))
         return result
     }
 
     /// Splits a set of windows into entries, grouping same-app windows
     /// (2+) under one `.group` entry, keeping a lone window as `.window`.
-    private static func groupedEntries(for windows: [AppWindow]) -> [TaskbarEntry] {
+    private static func groupedEntries(for windows: [AppWindow], grouped: Bool = true) -> [TaskbarEntry] {
+        guard grouped else { return windows.map { .window($0) } }
         var order: [String] = []
         var byKey: [String: [AppWindow]] = [:]
         for window in windows {
@@ -486,9 +533,8 @@ final class WindowManager {
     /// moving its top edge), the same outcome a real reserved `visibleFrame`
     /// would have produced. Cheap to call frequently: it's a no-op AX read
     /// for every window that isn't currently overlapping.
-    func reclaimReservedSpace(panelHeight: CGFloat) {
-        guard AXIsProcessTrusted(),
-              let dockScreen = DockController.dockScreen,
+    func reclaimReservedSpace(panelHeight: CGFloat, screens barScreens: [NSScreen]) {
+        guard AXIsProcessTrusted(), !barScreens.isEmpty,
               let primaryScreen = NSScreen.screens.first else { return }
 
         // AX coordinates are global, top-left-of-the-primary-screen-origin,
@@ -497,7 +543,6 @@ final class WindowManager {
         // frames use, without needing to know which physical screen a
         // window is on ahead of time.
         let primaryHeight = primaryScreen.frame.height
-        let reservedTop = dockScreen.frame.minY + panelHeight
 
         for window in windows where !window.isMinimized {
             guard
@@ -511,10 +556,12 @@ final class WindowManager {
                 width: axSize.width,
                 height: axSize.height
             )
-            // Only windows actually on the Dock's own screen can overlap
-            // our panel — a window on another display might coincidentally
-            // read a Y below `reservedTop` without being anywhere near it.
-            guard dockScreen.frame.intersects(appKitFrame), appKitFrame.minY < reservedTop else { continue }
+            // Only windows actually on a screen with a bar can overlap it —
+            // a window on another display might coincidentally read a Y
+            // below `reservedTop` without being anywhere near one.
+            guard let barScreen = barScreens.first(where: { $0.frame.intersects(appKitFrame) }) else { continue }
+            let reservedTop = barScreen.frame.minY + panelHeight
+            guard appKitFrame.minY < reservedTop else { continue }
 
             let overlap = reservedTop - appKitFrame.minY
             let newHeight = axSize.height - overlap
@@ -528,7 +575,22 @@ final class WindowManager {
         }
     }
 
+    /// The display a window's center falls on, from its Accessibility
+    /// frame (top-left origin, Y down). `nil` with a single display, where
+    /// there's nothing to tell apart.
+    private static func displayID(of axWindow: AXUIElement) -> CGDirectDisplayID? {
+        let screens = NSScreen.screens
+        guard screens.count > 1, let primary = screens.first,
+              let origin = copyPointAttribute(axWindow, kAXPositionAttribute),
+              let size = copySizeAttribute(axWindow, kAXSizeAttribute) else { return nil }
+        let center = CGPoint(x: origin.x + size.width / 2, y: primary.frame.height - (origin.y + size.height / 2))
+        return screens.first { $0.frame.contains(center) }?.displayID
+    }
+
     func refresh() {
+        // Apps hidden for the desktop peek are about to come straight back —
+        // not worth redrawing the bar around them for that moment.
+        guard !isPeekingDesktop else { return }
         guard AXIsProcessTrusted() else {
             windows = []
             return
@@ -577,7 +639,8 @@ final class WindowManager {
                     title: title,
                     appName: app.localizedName ?? "Application",
                     appIcon: app.icon,
-                    isMinimized: minimized
+                    isMinimized: minimized,
+                    displayID: minimized ? nil : Self.displayID(of: axWindow)
                 ))
             }
         }
@@ -823,6 +886,56 @@ final class WindowManager {
     /// when everything's already minimized. What the ⌘⌥D shortcut and the
     /// drag-hover spring-load use — they never restore anything; only the
     /// bar's own button does, via `toggleMinimizeAll()`.
+    // MARK: - Desktop peek
+
+    /// Windows' "Aero Peek" on the show-desktop strip: resting the pointer
+    /// on the minimize-all button for a moment hides every app so the
+    /// desktop shows through; moving off brings them all back. Hiding apps
+    /// (not minimizing windows) is what makes it instant and leaves nothing
+    /// to undo — `unhide` restores them exactly as they were.
+    private(set) var isPeekingDesktop = false
+    private var peekedApps: [NSRunningApplication] = []
+    private var peekFrontmost: NSRunningApplication?
+    private var peekWorkItem: DispatchWorkItem?
+    private static let peekDelay: TimeInterval = 0.5
+
+    func setDesktopPeek(_ active: Bool) {
+        peekWorkItem?.cancel()
+        peekWorkItem = nil
+        if active {
+            let work = DispatchWorkItem { [weak self] in self?.beginDesktopPeek() }
+            peekWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.peekDelay, execute: work)
+        } else {
+            endDesktopPeek(restoringFocus: true)
+        }
+    }
+
+    private func beginDesktopPeek() {
+        guard !isPeekingDesktop, !isEditingIcons else { return }
+        peekFrontmost = NSWorkspace.shared.frontmostApplication
+        peekedApps = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && !$0.isHidden && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        }
+        guard !peekedApps.isEmpty else { return }
+        isPeekingDesktop = true
+        peekedApps.forEach { $0.hide() }
+    }
+
+    /// Brings the hidden apps back. `restoringFocus: false` is for a click
+    /// that's about to minimize everything anyway.
+    func endDesktopPeek(restoringFocus: Bool) {
+        peekWorkItem?.cancel()
+        peekWorkItem = nil
+        guard isPeekingDesktop else { return }
+        isPeekingDesktop = false
+        peekedApps.forEach { $0.unhide() }
+        peekedApps = []
+        if restoringFocus { peekFrontmost?.activate() }
+        peekFrontmost = nil
+        refresh()
+    }
+
     func minimizeAll() {
         let toMinimize = windows.filter { !$0.isMinimized }
         guard !toMinimize.isEmpty else { return }

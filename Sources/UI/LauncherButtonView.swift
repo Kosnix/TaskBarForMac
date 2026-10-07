@@ -26,6 +26,9 @@ struct LauncherButtonView: View {
         // shows-a-blank-popup problem that made the old conditional
         // attachment necessary in the first place.
         content.contextMenu {
+            if !windowManager.isEditingIcons {
+                JumpListMenu(bundleIdentifier: app.bundleIdentifier, appURL: app.url, pid: nil)
+            }
             Button(L("taskbar.unpin")) {
                 windowManager.unpin(url: app.url, bundleIdentifier: app.bundleIdentifier, displayName: app.displayName)
             }
@@ -50,8 +53,8 @@ struct LauncherButtonView: View {
             Image(nsImage: windowManager.resolvedIcon(bundleIdentifier: app.bundleIdentifier, fallback: app.icon) ?? app.icon)
                 .resizable()
                 .frame(width: iconSize, height: iconSize)
-                .wiggle(isActive: windowManager.isEditingIcons, seed: app.id.hashValue)
-                .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
+                .wiggle(isActive: windowManager.isEditingIcons, since: windowManager.editModeChangedAt, seed: app.id.hashValue)
+                .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom, isPressed: windowManager.pressedIconID == "launcher-\(app.id)")
         }
         .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
@@ -66,8 +69,11 @@ struct LauncherButtonView: View {
         // `IconPressGesture.swift`'s doc comment. `blocksContextMenuWhenNotEditing`
         // dropped — the context menu now always has at least "Unpin" to
         // show, so a right-click has somewhere to go outside edit mode too.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, onTap: onLaunch) { isHovering in
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: app.bundleIdentifier, pressID: "launcher-\(app.id)", onMiddleClick: onLaunch, onTap: onLaunch) { isHovering in
             windowManager.hoveredWindowID = isHovering ? "launcher-\(app.id)" : (windowManager.hoveredWindowID == "launcher-\(app.id)" ? nil : windowManager.hoveredWindowID)
+            if isHovering {
+                JumpListStore.shared.prefetch(bundleIdentifier: app.bundleIdentifier, appURL: app.url, pid: nil)
+            }
         }
     }
 }

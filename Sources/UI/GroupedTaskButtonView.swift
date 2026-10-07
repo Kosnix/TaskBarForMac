@@ -23,17 +23,21 @@ struct GroupedTaskButtonView: View {
     var body: some View {
         HStack(spacing: 4) {
             if let icon = windowManager.resolvedIcon(bundleIdentifier: realBundleIdentifier, fallback: appIcon) {
+                AttentionPulse(isActive: AppStatusStore.shared.attention.contains(bundleIdentifier)) { pulse in
                 Image(nsImage: icon)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
-                    .wiggle(isActive: windowManager.isEditingIcons, seed: bundleIdentifier.hashValue)
-                    .hoverLift(isHovered: isHovered, zoomRatio: tokens.effectiveTaskbarIconHoverZoom)
+                    .wiggle(isActive: windowManager.isEditingIcons, since: windowManager.editModeChangedAt, seed: bundleIdentifier.hashValue)
+                    .hoverLift(isHovered: isHovered || pulse, zoomRatio: tokens.effectiveTaskbarIconHoverZoom, isPressed: windowManager.pressedIconID == "group-\(bundleIdentifier)")
                     // A single-window app never reaches this view at all
                     // (see `WindowManager.groupedEntries`, which only groups
                     // 2+ windows), so there's always a meaningful count to
                     // show — same badge style `TaskButtonView` uses for its
                     // own single-minimized-window case.
                     .taskWindowCountBadge(.count(windows.count), accentColor: Color(hex: tokens.colors.accent))
+                    .appNotificationBadge(AppStatusStore.shared.badges[bundleIdentifier])
+                    .appProgressBar(AppStatusStore.shared.progress[bundleIdentifier], accentColor: Color(hex: tokens.colors.accent))
+                }
             }
         }
         .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
@@ -50,6 +54,9 @@ struct GroupedTaskButtonView: View {
         .contentShape(Rectangle())
         .help(windowManager.resolvedDisplayName(bundleIdentifier: realBundleIdentifier, fallback: appName))
         .contextMenu {
+            if !windowManager.isEditingIcons, let pid = windows.first?.pid {
+                JumpListMenu(bundleIdentifier: realBundleIdentifier, appURL: NSRunningApplication(processIdentifier: pid)?.bundleURL, pid: pid)
+            }
             // Unpinning works outside edit mode too now.
             if windowManager.isPinned(bundleIdentifier: bundleIdentifier) {
                 Button(L("taskbar.unpin")) {
@@ -97,19 +104,13 @@ struct GroupedTaskButtonView: View {
         // doc comment for why this replaced a plain SwiftUI `.popover`
         // here (same underlying issue `StartMenuState` already documents
         // for `.popover` in this app's kind of panel).
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { windowManager.groupButtonFrames[bundleIdentifier] = geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace)) }
-                    .onChange(of: geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))) { _, newValue in
-                        windowManager.groupButtonFrames[bundleIdentifier] = newValue
-                    }
-            }
-        )
+        .background(GroupFrameReporter(bundleIdentifier: bundleIdentifier, windowManager: windowManager))
         // Last: needs to sit on top of `.taskReorderable`'s own `.onDrop`
         // target to actually receive left-clicks — see
         // `IconPressGesture.swift`'s doc comment.
-        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: realBundleIdentifier) {
+        .iconPressAndHold(windowManager: windowManager, bundleIdentifier: realBundleIdentifier, pressID: "group-\(bundleIdentifier)", onMiddleClick: {
+            if let pid = windows.first?.pid { JumpListStore.shared.openNewWindow(pid: pid) }
+        }) {
             // Primary click with no clear "the" window: raise the first
             // one, same as the ⌘⌥1…9 shortcut does for a group.
             if let first = windows.first {
@@ -117,6 +118,9 @@ struct GroupedTaskButtonView: View {
             }
         } onHoverChange: { hovering in
             windowManager.setGroupHovered(bundleIdentifier, hovering: hovering)
+            if hovering, let pid = windows.first?.pid {
+                JumpListStore.shared.prefetch(bundleIdentifier: realBundleIdentifier, appURL: NSRunningApplication(processIdentifier: pid)?.bundleURL, pid: pid)
+            }
         }
     }
 
@@ -126,6 +130,22 @@ struct GroupedTaskButtonView: View {
             Rectangle()
                 .fill(Color(hex: tokens.colors.accent))
                 .frame(height: 2)
+        }
+    }
+}
+
+private struct GroupFrameReporter: View {
+    let bundleIdentifier: String
+    let windowManager: WindowManager
+    @Environment(\.barID) private var barID
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .onAppear { windowManager.groupButtonFrames[BarFrames.key(barID, bundleIdentifier)] = geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace)) }
+                .onChange(of: geo.frame(in: .named(TaskbarView.taskbarRootCoordinateSpace))) { _, newValue in
+                    windowManager.groupButtonFrames[BarFrames.key(barID, bundleIdentifier)] = newValue
+                }
         }
     }
 }

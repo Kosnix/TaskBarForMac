@@ -8,6 +8,10 @@ extension Notification.Name {
     /// resize the actual window, not just the content inside it.
     static let panelSizeDidChange = Notification.Name("TB.panelSizeDidChange")
 
+    /// Posted when one of the optional features that needs starting or
+    /// stopping (Alt-Tab, window snapping, a bar per screen) is switched.
+    static let featuresDidChange = Notification.Name("TB.featuresDidChange")
+
     /// Posted whenever the start menu's effective size changes (a manual
     /// resize, or the taskbar's own height changing the dynamic default),
     /// so `StartMenuPanel` knows to resize the actual window.
@@ -48,6 +52,15 @@ enum StartMenuStyle: String, CaseIterable {
     /// doesn't live in the small anchored `StartMenuPanel` — see that
     /// type's own `frame(themeStore:)` for the full-screen special case.
     case launchpad
+}
+
+/// When a taskbar combines an app's windows under one icon (Windows'
+/// "Combine taskbar buttons").
+enum TaskGroupingMode: String, CaseIterable {
+    case always
+    /// Only once there are too many windows to give each its own button.
+    case whenFull
+    case never
 }
 
 /// One theme "family" (e.g. "Breeze", "Windows 7") — a `-light`/`-dark`
@@ -425,6 +438,155 @@ final class ThemeStore {
         }
     }
 
+    private static let windowPreviewsEnabledKey = "TB.taskbar.windowPreviews"
+
+    /// Thumbnails of a window (or a group of them) above its taskbar icon on hover — needs the Screen Recording permission.
+    var windowPreviewsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(windowPreviewsEnabled, forKey: Self.windowPreviewsEnabledKey)
+        }
+    }
+
+    private static let systemTrayEnabledKey = "TB.taskbar.systemTray"
+
+    /// Battery / Wi-Fi / volume indicators right of the clock, with a small panel on click.
+    var systemTrayEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(systemTrayEnabled, forKey: Self.systemTrayEnabledKey)
+        }
+    }
+
+    static let notificationBadgesEnabledKey = "TB.taskbar.notificationBadges"
+
+    /// Dock badges (unread mail count, etc.) on the taskbar's icons.
+    var notificationBadgesEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(notificationBadgesEnabled, forKey: Self.notificationBadgesEnabledKey)
+        }
+    }
+
+    private static let barOnAllScreensEnabledKey = "TB.taskbar.allScreens"
+
+    /// A taskbar on every screen instead of only the main one.
+    var barOnAllScreensEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(barOnAllScreensEnabled, forKey: Self.barOnAllScreensEnabledKey)
+            NotificationCenter.default.post(name: .featuresDidChange, object: nil)
+        }
+    }
+
+    private static let altTabEnabledKey = "TB.windows.altTab"
+
+    /// ⌥Tab window switcher with previews.
+    var altTabEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(altTabEnabled, forKey: Self.altTabEnabledKey)
+            NotificationCenter.default.post(name: .featuresDidChange, object: nil)
+        }
+    }
+
+    private static let windowSnapEnabledKey = "TB.windows.snap"
+
+    /// Dropping a window on a screen edge snaps it (half / maximized).
+    var windowSnapEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(windowSnapEnabled, forKey: Self.windowSnapEnabledKey)
+            NotificationCenter.default.post(name: .featuresDidChange, object: nil)
+        }
+    }
+
+    private static let groupingModeKey = "TB.taskbar.grouping"
+
+    /// See `TaskGroupingMode`.
+    var groupingMode: TaskGroupingMode {
+        didSet {
+            UserDefaults.standard.set(groupingMode.rawValue, forKey: Self.groupingModeKey)
+        }
+    }
+
+    static let quickSettingsEnabledKey = "TB.taskbar.quickSettings"
+    private static let focusShortcutNameKey = "TB.taskbar.focusShortcut"
+
+    /// Brightness, Bluetooth, dark mode, Focus and AirDrop in the
+    /// notification area's popup.
+    var quickSettingsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(quickSettingsEnabled, forKey: Self.quickSettingsEnabledKey)
+        }
+    }
+
+    /// Name of the Shortcut the popup's Focus button runs (macOS offers no
+    /// other way to switch Focus from another app).
+    var focusShortcutName: String {
+        didSet {
+            UserDefaults.standard.set(focusShortcutName, forKey: Self.focusShortcutNameKey)
+        }
+    }
+
+    private static let mediaPlayerEnabledKey = "TB.taskbar.mediaPlayer"
+
+    /// A now-playing button (Music / Spotify) with transport controls.
+    var mediaPlayerEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(mediaPlayerEnabled, forKey: Self.mediaPlayerEnabledKey)
+        }
+    }
+
+    private static let weatherEnabledKey = "TB.taskbar.weather"
+
+    /// A weather widget at the left of the bar.
+    var weatherEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(weatherEnabled, forKey: Self.weatherEnabledKey)
+        }
+    }
+
+    private static let clipboardHistoryEnabledKey = "TB.taskbar.clipboardHistory"
+
+    /// A clipboard-history button (like Win+V).
+    var clipboardHistoryEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(clipboardHistoryEnabled, forKey: Self.clipboardHistoryEnabledKey)
+        }
+    }
+
+    private static let screenshotButtonEnabledKey = "TB.taskbar.screenshotButton"
+
+    /// A screenshot button (like the Snipping Tool).
+    var screenshotButtonEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(screenshotButtonEnabled, forKey: Self.screenshotButtonEnabledKey)
+        }
+    }
+
+    private static let weatherOnRightKey = "TB.taskbar.weatherOnRight"
+
+    /// Which end of the bar the weather widget sits at: `false` is the left
+    /// (after the start button), `true` the right (before the clock).
+    var weatherOnRight: Bool {
+        didSet {
+            UserDefaults.standard.set(weatherOnRight, forKey: Self.weatherOnRightKey)
+        }
+    }
+
+    private static let weatherCityKey = "TB.taskbar.weatherCity"
+
+    /// City the weather widget shows.
+    var weatherCity: String {
+        didSet {
+            UserDefaults.standard.set(weatherCity, forKey: Self.weatherCityKey)
+        }
+    }
+
+    private static let extraTimeZonesKey = "TB.taskbar.extraTimeZones"
+
+    /// Extra clocks (time-zone identifiers, comma-separated) under the calendar.
+    var extraTimeZones: String {
+        didSet {
+            UserDefaults.standard.set(extraTimeZones, forKey: Self.extraTimeZonesKey)
+        }
+    }
+
     private static let startMenuTriggerModifierKey = "TB.startMenu.triggerModifier"
 
     /// Which modifier, tapped alone, toggles the start menu —
@@ -498,6 +660,22 @@ final class ThemeStore {
         clockEnabled = (UserDefaults.standard.object(forKey: Self.clockEnabledKey) as? Bool) ?? true
         clockShowDate = UserDefaults.standard.bool(forKey: Self.clockShowDateKey)
         infiniteScrollEnabled = UserDefaults.standard.bool(forKey: Self.infiniteScrollEnabledKey)
+        mediaPlayerEnabled = UserDefaults.standard.bool(forKey: Self.mediaPlayerEnabledKey)
+        weatherEnabled = UserDefaults.standard.bool(forKey: Self.weatherEnabledKey)
+        clipboardHistoryEnabled = UserDefaults.standard.bool(forKey: Self.clipboardHistoryEnabledKey)
+        screenshotButtonEnabled = UserDefaults.standard.bool(forKey: Self.screenshotButtonEnabledKey)
+        weatherOnRight = UserDefaults.standard.bool(forKey: Self.weatherOnRightKey)
+        weatherCity = UserDefaults.standard.string(forKey: Self.weatherCityKey) ?? ""
+        extraTimeZones = UserDefaults.standard.string(forKey: Self.extraTimeZonesKey) ?? ""
+        quickSettingsEnabled = UserDefaults.standard.bool(forKey: Self.quickSettingsEnabledKey)
+        focusShortcutName = UserDefaults.standard.string(forKey: Self.focusShortcutNameKey) ?? ""
+        groupingMode = UserDefaults.standard.string(forKey: Self.groupingModeKey).flatMap(TaskGroupingMode.init(rawValue:)) ?? .always
+        windowPreviewsEnabled = (UserDefaults.standard.object(forKey: Self.windowPreviewsEnabledKey) as? Bool) ?? true
+        systemTrayEnabled = (UserDefaults.standard.object(forKey: Self.systemTrayEnabledKey) as? Bool) ?? false
+        notificationBadgesEnabled = (UserDefaults.standard.object(forKey: Self.notificationBadgesEnabledKey) as? Bool) ?? true
+        barOnAllScreensEnabled = (UserDefaults.standard.object(forKey: Self.barOnAllScreensEnabledKey) as? Bool) ?? true
+        altTabEnabled = (UserDefaults.standard.object(forKey: Self.altTabEnabledKey) as? Bool) ?? false
+        windowSnapEnabled = (UserDefaults.standard.object(forKey: Self.windowSnapEnabledKey) as? Bool) ?? false
         if let storedStyle = UserDefaults.standard.string(forKey: Self.startMenuStyleKey), let style = StartMenuStyle(rawValue: storedStyle) {
             startMenuStyle = style
         }

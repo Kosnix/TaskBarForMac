@@ -194,7 +194,10 @@ struct StartMenuView: View {
 
     private func launchSelected() {
         let apps = filteredApps
-        guard apps.indices.contains(state.selectedIndex) else { return }
+        guard apps.indices.contains(state.selectedIndex) else {
+            SearchExtras.runPrimary(query: state.query, onDone: onLaunch)
+            return
+        }
         launch(apps[state.selectedIndex])
     }
 
@@ -258,6 +261,10 @@ struct StartMenuView: View {
     private var appGrid: some View {
         ScrollViewReader { proxy in
             ThemedScrollView(proxy: proxy, accentColor: Color(hex: tokens.colors.accent), itemIDs: filteredApps.map(\.id), state: state, loops: loopsEnabled) {
+                VStack(spacing: 10) {
+                if !state.query.isEmpty {
+                    SearchExtrasView(query: state.query, tokens: tokens, onDone: onLaunch)
+                }
                 LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(LoopList.entries(filteredApps, columns: Self.columnCount, loops: loopsEnabled)) { entry in
                         if let app = entry.item {
@@ -272,6 +279,7 @@ struct StartMenuView: View {
                     }
                 }
                 .scrollTargetLayout()
+                }
                 .padding(gridPadding)
             }
             .onChange(of: state.selectedIndex) { _, newIndex in

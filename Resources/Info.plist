@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>dev.nikos.taskbarformac</string>
     <key>CFBundleVersion</key>
-    <string>1.2.3</string>
+    <string>1.3.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.3</string>
+    <string>1.3.0</string>
     <key>CFBundleExecutable</key>
     <string>TaskBarForMac</string>
     <key>CFBundleIconFile</key>
@@ -29,7 +29,9 @@
     <key>NSAccessibilityUsageDescription</key>
     <string>Cette application a besoin de l'accès à l'Accessibilité pour lister, activer et minimiser les fenêtres des autres applications, à la place du Dock natif.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Cette application a besoin d'envoyer des évènements Apple à System Events pour verrouiller, redémarrer ou éteindre depuis le menu démarrer.</string>
+    <string>Cette application envoie des évènements Apple à System Events (verrouiller, redémarrer, éteindre depuis le menu démarrer), au Finder (vider la corbeille) et aux lecteurs Musique ou Spotify (lecteur multimédia de la barre).</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Cette application active ou désactive le Bluetooth depuis les réglages rapides de la barre.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>
