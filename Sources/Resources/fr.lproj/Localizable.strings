@@ -1,0 +1,233 @@
+/* General */
+"app.no_theme" = "Aucun thème disponible";
+"button.cancel" = "Annuler";
+
+/* Personalization menu */
+"menu.activity_monitor" = "Moniteur d'activité";
+"menu.settings" = "Paramètres…";
+"menu.edit_icons" = "Mode Édition";
+"menu.theme" = "Thème";
+"menu.bar_size" = "Taille de la barre";
+"settings.icon_size" = "Taille des icônes";
+"settings.icon_spacing" = "Espacement des icônes";
+"settings.icon_hover_zoom" = "Zoom au survol";
+"account.open_settings" = "Ouvrir les réglages du compte Apple";
+"icon_picker.title" = "Choisir une nouvelle icône";
+"icon_edit.done" = "Terminé";
+"icon_edit.restore_original" = "Rétablir l'icône d'origine";
+"icon_edit.change" = "Changer l'icône";
+"menu.rename" = "Renommer…";
+"icon_edit.restore_original_name" = "Rétablir le nom d'origine";
+"rename.title" = "Renommer « {name} »";
+"rename.message" = "Ce nom ne s'applique que dans TaskBarForMac.";
+"rename.confirm" = "Renommer";
+"launchpad.new_folder" = "Nouveau dossier";
+"menu.remove_from_folder" = "Retirer du dossier";
+"menu.open_apps" = "Applications ouvertes";
+"menu.liquid_glass" = "Fond transparent";
+"menu.liquid_glass_intensity" = "Intensité de la transparence";
+"menu.auto_hide" = "Masquer la taskbar automatiquement";
+"menu.language" = "Langue";
+"menu.quit" = "Quitter la barre des tâches";
+"language.system" = "Système ({lang})";
+
+"display.icon_and_label" = "Icône + nom";
+"display.icon_only" = "Icônes seules";
+
+/* Settings window */
+"settings.window_title" = "Paramètres";
+"settings.color_scheme" = "Mode d'affichage";
+"settings.color_scheme.light" = "Clair";
+"settings.color_scheme.dark" = "Sombre";
+"settings.color_scheme.system" = "Automatique";
+"settings.section.layout" = "Disposition";
+"settings.alignment" = "Alignement des icônes";
+"settings.alignment.left" = "Aligné à gauche";
+"settings.alignment.center" = "Centrer";
+"settings.alignment.center_with_start" = "Centrer avec le menu démarrer";
+"settings.section.clock" = "Horloge";
+"settings.clock.show" = "Afficher l'horloge";
+"settings.clock.show_date" = "Afficher la date";
+"settings.section.appearance" = "Apparence";
+"settings.section.general" = "Général";
+"settings.launch_at_login" = "Démarrer avec la session";
+"settings.section.start_menu" = "Menu démarrer";
+"settings.start_menu_style" = "Style du menu démarrer";
+"settings.start_menu_style.kickoff" = "Kickoff";
+"settings.start_menu_style.windows11" = "Windows 11";
+"settings.start_menu_style.windows7" = "Windows 7";
+"settings.start_menu_style.launchpad" = "Launchpad";
+"settings.start_menu_style.spotlight" = "Spotlight";
+"settings.start_menu_style.native_apps" = "Apps (macOS)";
+"settings.start_menu_trigger_modifier" = "Touche de déclenchement";
+"settings.start_menu_trigger.none" = "Aucune";
+"settings.start_menu_trigger.command" = "Commande";
+"settings.start_menu_trigger.option" = "Option";
+"settings.start_menu_trigger.control" = "Contrôle";
+"settings.start_menu_trigger.shift" = "Majuscule";
+"settings.start_menu_custom_shortcut" = "Raccourci personnalisé";
+"settings.shortcut.recording" = "Appuyez sur une touche…";
+"settings.shortcut.none" = "Aucun";
+"start.documents" = "Documents";
+"start.pictures" = "Images";
+"start.music" = "Musique";
+"start.downloads" = "Téléchargements";
+"start.computer" = "Ordinateur";
+"start.control_panel" = "Panneau de configuration";
+
+/* Taskbar */
+"accessibility.prompt" = "Autoriser l'accès à l'Accessibilité pour gérer les fenêtres →";
+"help.minimize_all" = "Réduire toutes les fenêtres";
+"help.trash" = "Corbeille";
+
+/* Window controls */
+"window.untitled" = "Fenêtre";
+"window.restore" = "Restaurer";
+"window.minimize" = "Réduire";
+"window.close" = "Fermer";
+"window.close_all" = "Tout fermer";
+"window.force_quit" = "Forcer à quitter";
+"taskbar.pin" = "Épingler à la barre des tâches";
+"taskbar.unpin" = "Détacher de la barre des tâches";
+
+/* Start menu session footer */
+"session.lock" = "Verrouiller l'écran";
+"session.sleep" = "Mettre en veille";
+"session.logout" = "Se déconnecter";
+"session.restart" = "Redémarrer";
+"session.shutdown" = "Éteindre";
+
+"search.placeholder" = "Rechercher une application…";
+
+/* Start menu app grid */
+"menu.show_in_finder" = "Afficher dans le dossier Applications";
+"app.trash" = "Déplacer à la corbeille";
+"alert.trash_app.title" = "Supprimer « {name} » ?";
+"alert.trash_app.message" = "L'application sera déplacée à la corbeille.";
+"alert.uninstall_failed.title" = "Impossible de supprimer « {name} »";
+"menu.empty_trash" = "Vider la corbeille";
+"alert.empty_trash.title" = "Vider la corbeille ?";
+"alert.empty_trash.message" = "Les éléments de la corbeille seront supprimés définitivement.";
+"alert.uninstall_failed.message" = "Cette application est peut-être protégée par le système.\n{error}";
+
+
+/* Dock recovery */
+"alert.dock_recovery.title" = "Le Dock est resté modifié";
+"alert.dock_recovery.message" = "La session précédente ne s'est pas terminée normalement. Voulez-vous restaurer les réglages d'origine du Dock avant de continuer ?";
+"button.restore_dock" = "Restaurer le Dock";
+"button.continue_without_restoring" = "Continuer sans restaurer";
+
+/* Session confirmation dialogs */
+"session.logout_confirm.title" = "Se déconnecter ?";
+"session.restart_confirm.title" = "Redémarrer l'ordinateur ?";
+"session.shutdown_confirm.title" = "Éteindre l'ordinateur ?";
+"session.confirm.message" = "Toutes les applications ouvertes seront fermées.";
+
+/* App categories */
+"category.all" = "Toutes les applications";
+"category.utilities" = "Utilitaires";
+"category.developer_tools" = "Développement";
+"category.productivity" = "Bureautique";
+"category.graphics_design" = "Graphisme";
+"category.photography" = "Photo";
+"category.video" = "Vidéo";
+"category.music" = "Musique";
+"category.games" = "Jeux";
+"category.social_networking" = "Réseaux sociaux";
+"category.education" = "Éducation";
+"category.finance" = "Finances";
+"category.lifestyle" = "Style de vie";
+"category.entertainment" = "Divertissement";
+"category.reference" = "Référence";
+"category.news" = "Actualités";
+"category.sports" = "Sport";
+"category.travel" = "Voyage";
+"category.weather" = "Météo";
+"category.healthcare_fitness" = "Santé";
+"category.navigation" = "Navigation";
+"category.system" = "Système";
+"category.other" = "Autre";
+
+/* Updates */
+"update.section" = "Mises à jour";
+"update.current_version" = "Version actuelle";
+"update.check" = "Rechercher des mises à jour";
+"update.checking" = "Recherche en cours…";
+"update.up_to_date" = "TaskBarForMac est à jour.";
+"update.available" = "La version {version} est disponible.";
+"update.notes" = "Nouveautés";
+"update.install" = "Télécharger et installer";
+"update.downloading" = "Téléchargement…";
+"update.installing" = "Installation, l’app va redémarrer…";
+"update.error.server" = "Impossible de joindre GitHub.";
+"update.error.no_asset" = "Aucun fichier d’installation dans cette version.";
+"update.error.not_installed" = "L’installation automatique nécessite l’app installée (.app).";
+"update.error.not_writable" = "Impossible d’écrire dans le dossier de l’app (droits insuffisants).";
+"update.error.invalid_package" = "Le fichier téléchargé est invalide ou corrompu.";
+"settings.infinite_scroll" = "Défilement infini des listes";
+"settings.section.features" = "Fonctions de la barre";
+"settings.window_previews" = "Aperçu des fenêtres au survol";
+"settings.screen_recording_needed" = "Nécessite l’autorisation « Enregistrement de l’écran ».";
+"settings.open_system_settings" = "Ouvrir les Réglages Système";
+"settings.system_tray" = "Zone de notification (batterie, Wi-Fi, volume)";
+"settings.notification_badges" = "Pastilles de notification des apps";
+"settings.all_screens" = "Une barre sur chaque écran";
+"settings.alt_tab" = "Alt-Tab avec aperçus (⌥Tab)";
+"settings.window_snap" = "Magnétisme des fenêtres aux bords de l’écran";
+"calendar.open" = "Ouvrir Calendrier";
+"tray.volume" = "Volume";
+"tray.battery" = "Batterie";
+"tray.wifi_off" = "Désactivé";
+"tray.wifi_connected" = "Connecté";
+"tray.wifi_not_connected" = "Non connecté";
+"tray.charging" = "En charge";
+"tray.on_ac" = "Sur secteur";
+"search.copy_result" = "Copier le résultat";
+"search.web" = "Rechercher « {query} » sur le web";
+"start.recommended" = "Recommandé";
+"jumplist.new_window" = "Nouvelle fenêtre";
+"jumplist.recent" = "Récents";
+"settings.grouping" = "Regrouper les fenêtres d’une app";
+"settings.grouping.always" = "Toujours";
+"settings.grouping.when_full" = "Quand la barre est pleine";
+"settings.grouping.never" = "Jamais";
+"quick.dark_mode" = "Mode sombre";
+"quick.focus" = "Ne pas déranger";
+"settings.quick_settings" = "Réglages rapides (luminosité, Bluetooth, mode sombre…)";
+"settings.focus_shortcut" = "Raccourci « Ne pas déranger »";
+"settings.focus_shortcut.prompt" = "Nom d’un raccourci (app Raccourcis)";
+"settings.weather" = "Météo dans la barre";
+"settings.weather_city" = "Ville de la météo";
+"settings.time_zones" = "Fuseaux horaires supplémentaires";
+"settings.media_player" = "Lecteur multimédia (Musique, Spotify)";
+"settings.clipboard_history" = "Historique du presse-papiers";
+"settings.screenshot_button" = "Bouton de capture d’écran";
+"weather.set_city" = "Indiquez une ville dans les Paramètres";
+"weather.unavailable" = "Météo indisponible";
+"weather.clear" = "Dégagé";
+"weather.partly" = "Éclaircies";
+"weather.cloudy" = "Nuageux";
+"weather.fog" = "Brouillard";
+"weather.drizzle" = "Bruine";
+"weather.rain" = "Pluie";
+"weather.snow" = "Neige";
+"weather.showers" = "Averses";
+"weather.thunder" = "Orage";
+"clipboard.title" = "Presse-papiers";
+"clipboard.clear" = "Effacer";
+"clipboard.empty" = "Rien de copié pour l’instant.";
+"screenshot.help" = "Capture d’écran";
+"settings.weather_position" = "Emplacement de la météo";
+"settings.weather_position.left" = "Gauche";
+"settings.weather_position.right" = "Droite";
+"settings.start_menu_style.windows_xp" = "Windows XP";
+"xp.start" = "démarrer";
+"settings.theme_menu" = "Adapter automatiquement le menu démarrer au thème";
+"settings.theme_layout" = "Ajuster automatiquement la disposition au thème";
+"settings.start_menu_style.windows10" = "Windows 10";
+"start.pinned" = "Épinglé";
+"start.most_used" = "Les plus utilisées";
+"start.apps" = "Applications";
+"start.xp.internet" = "Internet";
+"start.xp.email" = "E-mail";
+"start.all_apps" = "Toutes les applications";

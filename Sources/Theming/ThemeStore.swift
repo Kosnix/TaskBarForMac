@@ -1,0 +1,936 @@
+import AppKit
+import Foundation
+import Observation
+
+extension Notification.Name {
+    /// Posted whenever the effective panel size changes, so `TaskbarPanel`
+    /// (a plain NSPanel, outside SwiftUI's own re-render cycle) knows to
+    /// resize the actual window, not just the content inside it.
+    static let panelSizeDidChange = Notification.Name("TB.panelSizeDidChange")
+
+    /// Posted when one of the optional features that needs starting or
+    /// stopping (Alt-Tab, window snapping, a bar per screen) is switched.
+    static let featuresDidChange = Notification.Name("TB.featuresDidChange")
+
+    /// Posted whenever the start menu's effective size changes (a manual
+    /// resize, or the taskbar's own height changing the dynamic default),
+    /// so `StartMenuPanel` knows to resize the actual window.
+    static let startMenuSizeDidChange = Notification.Name("TB.startMenuSizeDidChange")
+}
+
+/// Light/dark now chosen independently of which theme "family" is active —
+/// every family ships both a `-light` and a `-dark` folder (same `id` minus
+/// that suffix, same `manifest.name` minus " Light"/" Dark"), so picking a
+/// family and a mode separately just means resolving to whichever of that
+/// family's two folders matches.
+enum ColorSchemeMode: String, CaseIterable {
+    case light, dark, system
+}
+
+/// Which UI the start button opens — see `ThemeStore.startMenuStyle`.
+enum StartMenuStyle: String, CaseIterable {
+    /// The original Plasma Kickoff-style layout: search on top, a category
+    /// sidebar on the left, a filterable app grid on the right.
+    case kickoff
+    /// Windows 11's Start menu: search on top, no sidebar, a grid of
+    /// taskbar-pinned apps under "Épinglé" with a toggle to show every
+    /// discovered app instead, an account-name/power-button footer.
+    case windows11
+    /// Windows 7's Start menu: a two-column layout — a plain list of
+    /// pinned programs (switchable to "All Programs") with a search field
+    /// on the left, an account picture and quick folder/system links on
+    /// the right, and a split Shut Down button at the bottom.
+    case windows7
+    /// Windows XP's Start menu: blue header with the account picture, white
+    /// programs column, pale-blue places column, blue footer.
+    case windowsXP
+    /// Windows 10's Start menu: icon rail, alphabetical app list, pinned
+    /// tiles.
+    case windows10
+    /// Opens the real, system Spotlight instead of any menu this app draws
+    /// itself — see `SpotlightTrigger`.
+    case realSpotlight
+    /// Opens macOS's own "Apps" menu (macOS 27+) — see `NativeAppsTrigger`.
+    case nativeApps
+    /// macOS's own (now-retired) Launchpad: a full-screen, paginated grid
+    /// of every installed app over a blurred/dimmed desktop, with a
+    /// type-to-search field at the top. Unlike every other style, this one
+    /// doesn't live in the small anchored `StartMenuPanel` — see that
+    /// type's own `frame(themeStore:)` for the full-screen special case.
+    case launchpad
+}
+
+/// When a taskbar combines an app's windows under one icon (Windows'
+/// "Combine taskbar buttons").
+enum TaskGroupingMode: String, CaseIterable {
+    case always
+    /// Only once there are too many windows to give each its own button.
+    case whenFull
+    case never
+}
+
+/// One theme "family" (e.g. "Breeze", "Windows 7") — a `-light`/`-dark`
+/// pair grouped under a shared id/display name, for `ThemeStore`'s
+/// mode-independent theme picker. See `ColorSchemeMode`.
+struct ThemeFamily: Identifiable, Hashable {
+    let id: String
+    let displayName: String
+}
+
+/// Holds the active theme and every theme discovered on disk, and hot-reloads
+/// the active theme's folder so editing tokens.json updates the UI live.
+/// Also owns the user's panel-size override.
+@Observable
+final class ThemeStore {
+    private(set) var availableThemes: [Theme] = []
+    private(set) var activeTheme: Theme?
+
+    private static let heightOverrideKey = "TB.panel.heightOverride"
+    private static let activeThemeIDKey = "TB.theme.activeID"
+    private static let selectedFamilyIDKey = "TB.theme.familyID"
+    private static let colorSchemeModeKey = "TB.theme.colorSchemeMode"
+
+    /// The currently chosen theme family (e.g. "breeze", "windows-7"),
+    /// independent of light/dark — see `colorSchemeMode`. Setting this
+    /// directly (rather than through `setActiveFamily`) would leave it out
+    /// of sync with `activeTheme`, so it's only ever changed there.
+    private(set) var selectedFamilyID: String = "breeze"
+
+    /// Every distinct family across `availableThemes`, one entry per
+    /// `-light`/`-dark` pair, for the Settings window's theme picker.
+    var themeFamilies: [ThemeFamily] {
+        var seen = Set<String>()
+        var result: [ThemeFamily] = []
+        for theme in availableThemes {
+            let familyID = Self.familyID(for: theme)
+            guard !seen.contains(familyID) else { continue }
+            seen.insert(familyID)
+            result.append(ThemeFamily(id: familyID, displayName: Self.familyDisplayName(for: theme)))
+        }
+        return result.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    private static func familyID(for theme: Theme) -> String {
+        let suffix = "-\(theme.manifest.variant)"
+        return theme.id.hasSuffix(suffix) ? String(theme.id.dropLast(suffix.count)) : theme.id
+    }
+
+    private static func familyDisplayName(for theme: Theme) -> String {
+        theme.manifest.name
+            .replacingOccurrences(of: " Dark", with: "")
+            .replacingOccurrences(of: " Light", with: "")
+    }
+
+    /// Picks `familyID`'s theme, persists the choice, and resolves it to
+    /// the right light/dark variant for the current `colorSchemeMode`.
+    func setActiveFamily(_ familyID: String) {
+        selectedFamilyID = familyID
+        UserDefaults.standard.set(familyID, forKey: Self.selectedFamilyIDKey)
+        resolveActiveTheme()
+        if layoutFollowsTheme { applyThemeLayout() }
+        if startMenuFollowsTheme { applyThemeStartMenuStyle() }
+    }
+
+    private static let systemAppearanceChangedNotification = Notification.Name("AppleInterfaceThemeChangedNotification")
+    private var systemAppearanceObserver: NSObjectProtocol?
+
+    /// Light, dark, or following the system's own appearance — independent
+    /// of `selectedFamilyID`. Changing this re-resolves the active theme to
+    /// that family's matching variant.
+    var colorSchemeMode: ColorSchemeMode = .dark {
+        didSet {
+            guard colorSchemeMode != oldValue else { return }
+            UserDefaults.standard.set(colorSchemeMode.rawValue, forKey: Self.colorSchemeModeKey)
+            resolveActiveTheme()
+        }
+    }
+
+    /// Resolves `selectedFamilyID` + `colorSchemeMode` to one of
+    /// `availableThemes` and applies it. A family missing the resolved
+    /// variant (shouldn't happen for the shipped themes, every one ships
+    /// both) falls back to whichever variant it does have.
+    private func resolveActiveTheme() {
+        let variant: String
+        switch colorSchemeMode {
+        case .light: variant = "light"
+        case .dark: variant = "dark"
+        case .system: variant = isSystemDarkModeActive() ? "dark" : "light"
+        }
+        let candidates = availableThemes.filter { Self.familyID(for: $0) == selectedFamilyID }
+        let resolved = candidates.first { $0.manifest.variant == variant } ?? candidates.first
+        if let resolved {
+            setActiveTheme(resolved)
+        }
+    }
+
+    private func isSystemDarkModeActive() -> Bool {
+        NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    private func startObservingSystemAppearance() {
+        systemAppearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Self.systemAppearanceChangedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.colorSchemeMode == .system else { return }
+            self.resolveActiveTheme()
+        }
+    }
+
+    /// User-chosen panel height from the right-click "Taille de la barre"
+    /// menu, persisted across launches. `nil` means "use the theme's own
+    /// default".
+    var panelHeightOverride: Double? {
+        didSet {
+            if let panelHeightOverride {
+                UserDefaults.standard.set(panelHeightOverride, forKey: Self.heightOverrideKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.heightOverrideKey)
+            }
+            NotificationCenter.default.post(name: .panelSizeDidChange, object: nil)
+        }
+    }
+
+    /// The panel's height: the user's override, or the active theme's own
+    /// default. Deliberately not floored by the real Dock's reserved height —
+    /// the Dock is auto-hidden, and the reading used to get stuck at ~60pt,
+    /// stopping the bar from going any smaller.
+    var effectivePanelHeight: CGFloat {
+        if let panelHeightOverride {
+            return CGFloat(panelHeightOverride)
+        }
+        return CGFloat(activeTheme?.tokens.panel.height ?? 44)
+    }
+
+    private static let taskDisplayStyleOverrideKey = "TB.taskButton.displayStyleOverride"
+
+    /// User-chosen task-button style from the right-click menu: icon + label
+    /// (the theme's usual style) or icon-only (Plasma's "Icons-only Task
+    /// Manager" equivalent). `nil` means "use the theme's own default".
+    var taskDisplayStyleOverride: String? {
+        didSet {
+            if let taskDisplayStyleOverride {
+                UserDefaults.standard.set(taskDisplayStyleOverride, forKey: Self.taskDisplayStyleOverrideKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.taskDisplayStyleOverrideKey)
+            }
+        }
+    }
+
+    var effectiveTaskDisplayStyle: String {
+        taskDisplayStyleOverride ?? activeTheme?.tokens.taskButton.displayStyle ?? "iconAndLabel"
+    }
+
+    private static let liquidGlassEnabledKey = "TB.panel.liquidGlassEnabled"
+
+    /// Opt-in replacement for the theme's own blur/flat background with
+    /// macOS's system "Liquid Glass" material (`NSGlassEffectView`, macOS
+    /// 26+). Persisted, off by default since it's a system-wide look, not
+    /// something every theme's design was built around.
+    var liquidGlassEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(liquidGlassEnabled, forKey: Self.liquidGlassEnabledKey)
+        }
+    }
+
+    private static let liquidGlassIntensityKey = "TB.panel.liquidGlassIntensity"
+
+    /// How strongly the theme's own color tints the Liquid Glass look, from
+    /// 0 (as see-through as the material allows) to 1 (close to a solid,
+    /// flat panel) — the slider next to the on/off toggle in the
+    /// personalization menu.
+    var liquidGlassIntensity: Double {
+        didSet {
+            UserDefaults.standard.set(liquidGlassIntensity, forKey: Self.liquidGlassIntensityKey)
+        }
+    }
+
+    private static let taskbarIconRatioKey = "TB.taskbar.iconRatio"
+
+    /// How large a task/launcher button's icon is, as a fraction of the
+    /// panel's own height — the slider in the personalization menu. Applied
+    /// the same way `effectivePanelHeight`/`effectiveTaskDisplayStyle` are:
+    /// baked into a mutable copy of `theme.tokens` right before it's handed
+    /// to the icon-drawing views (see `TaskbarView.content(for:)` and
+    /// `StartMenuPanel`), rather than threaded through every small view
+    /// individually.
+    var taskbarIconRatio: Double {
+        didSet {
+            UserDefaults.standard.set(taskbarIconRatio, forKey: Self.taskbarIconRatioKey)
+        }
+    }
+
+    private static let taskbarIconSpacingRatioKey = "TB.taskbar.iconSpacingRatio"
+
+    /// How much room sits between task/launcher buttons, as a fraction of
+    /// the icon's own size — same slider pattern and application point as
+    /// `taskbarIconRatio` just above.
+    var taskbarIconSpacingRatio: Double {
+        didSet {
+            UserDefaults.standard.set(taskbarIconSpacingRatio, forKey: Self.taskbarIconSpacingRatioKey)
+        }
+    }
+
+    private static let taskbarIconHoverZoomRatioKey = "TB.taskbar.iconHoverZoomRatio"
+
+    /// How much a taskbar icon grows on hover, as a fraction of its own
+    /// size — same slider pattern and application point as
+    /// `taskbarIconRatio` just above.
+    var taskbarIconHoverZoomRatio: Double {
+        didSet {
+            UserDefaults.standard.set(taskbarIconHoverZoomRatio, forKey: Self.taskbarIconHoverZoomRatioKey)
+        }
+    }
+
+    private static let startMenuWidthOverrideKey = "TB.startMenu.widthOverride"
+    private static let startMenuHeightOverrideKey = "TB.startMenu.heightOverride"
+
+    /// User-resized start menu dimensions (dragging its corner handle),
+    /// persisted across launches. `nil` means "use the dynamic default" —
+    /// see `effectiveStartMenuSize`.
+    var startMenuSizeOverride: CGSize? {
+        didSet {
+            if let startMenuSizeOverride {
+                UserDefaults.standard.set(Double(startMenuSizeOverride.width), forKey: Self.startMenuWidthOverrideKey)
+                UserDefaults.standard.set(Double(startMenuSizeOverride.height), forKey: Self.startMenuHeightOverrideKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.startMenuWidthOverrideKey)
+                UserDefaults.standard.removeObject(forKey: Self.startMenuHeightOverrideKey)
+            }
+            NotificationCenter.default.post(name: .startMenuSizeDidChange, object: nil)
+        }
+    }
+
+    private static let referenceBarHeight: CGFloat = 36
+    private static let startMenuBaseSize = CGSize(width: 580, height: 452)
+    private static let startMenuScaleRange: ClosedRange<CGFloat> = 0.7...2.2
+    static let startMenuMinSize = CGSize(width: 320, height: 260)
+    static let startMenuMaxSize = CGSize(width: 1000, height: 800)
+
+    /// The start menu's default size scales with the taskbar's own
+    /// height — a taller bar (bigger icons) reads oddly next to a
+    /// start menu sized for the default bar — clamped to a sane range so
+    /// an extreme bar height doesn't produce an absurd menu.
+    var dynamicStartMenuSize: CGSize {
+        let scale = Self.startMenuScaleRange.clamp(effectivePanelHeight / Self.referenceBarHeight)
+        return CGSize(width: Self.startMenuBaseSize.width * scale, height: Self.startMenuBaseSize.height * scale)
+    }
+
+    /// What the start menu should actually render at: the user's manual
+    /// resize if there is one, else the dynamic default. Clamped against
+    /// `effectiveStartMenuMinSize` so a size saved under one start menu
+    /// style (or before that style's own minimum was tightened) can't
+    /// leave a *different* style's fixed-column grid squeezed smaller than
+    /// its content needs after switching styles.
+    var effectiveStartMenuSize: CGSize {
+        let size = startMenuSizeOverride ?? dynamicStartMenuSize
+        let minSize = effectiveStartMenuMinSize
+        return CGSize(width: max(size.width, minSize.width), height: max(size.height, minSize.height))
+    }
+
+    /// `startMenuMinSize` alone let the corner handle drag every layout
+    /// down to the same flat 320×260 floor, but Kickoff's fixed-width
+    /// category sidebar and Windows 11's fixed six-column grid (kept fixed,
+    /// not `.adaptive`, so arrow-key jumps stay predictable — see
+    /// `StartMenuView`/`Windows11StartMenuView`) both have a real minimum
+    /// width their *content* needs regardless of the window's own size: a
+    /// fixed column count can't reflow to fewer columns the way an
+    /// adaptive grid would, so squeezing the window past that point just
+    /// spills icons/text past the grid's own bounds instead of resizing
+    /// them. Windows 7's plain list has no such fixed-column-count
+    /// requirement, so it keeps the plain floor.
+    var effectiveStartMenuMinSize: CGSize {
+        let floor = Self.startMenuMinSize
+        switch startMenuStyle {
+        case .windows11:
+            // Matches `Windows11StartMenuView.iconSize`/`appCell`'s own math:
+            // each cell needs at least `iconSize + 20` (its label's fixed
+            // frame width, wider than the icon itself) across its fixed
+            // 6-column grid, plus that grid's own inter-column spacing (12)
+            // and the surrounding 20pt padding on both sides.
+            let iconSize = max(12, effectivePanelHeight * taskbarIconRatio) * 2
+            let columns: CGFloat = 6
+            let width = columns * (iconSize + 20) + (columns - 1) * 12 + 40
+            return CGSize(width: max(floor.width, width), height: floor.height)
+        case .kickoff, .realSpotlight, .nativeApps:
+            // Matches `StartMenuView`'s own fixed 180pt category sidebar
+            // plus its 3-column grid (60pt minimum per column) and padding.
+            let width: CGFloat = 180 + 3 * 60 + 2 * 8 + 2 * 10 + 4
+            return CGSize(width: max(floor.width, width), height: floor.height)
+        case .windows7, .windowsXP:
+            return floor
+        case .windows10:
+            // Rail (48) + app list (270) + three tiles across (3 × 96 + 2 × 4
+            // + padding).
+            let railAndList: CGFloat = 48 + 270
+            let tiles: CGFloat = 3 * 96 + 2 * 4 + 28
+            return CGSize(width: max(floor.width, railAndList + tiles), height: floor.height)
+        case .launchpad:
+            // Never actually consulted — `StartMenuPanel.frame(themeStore:)`
+            // sizes this style to the whole screen instead of reading
+            // `effectiveStartMenuSize`/this floor at all. Here only to keep
+            // the switch exhaustive.
+            return floor
+        }
+    }
+
+    private static let autoHideEnabledKey = "TB.panel.autoHideEnabled"
+
+    /// Windows-style auto-hide: the bar retracts off-screen (leaving a
+    /// thin, hover-to-reveal sliver) when the mouse isn't near it — see
+    /// `TaskbarPanel`'s own auto-hide tracking, which reads this.
+    var autoHideEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(autoHideEnabled, forKey: Self.autoHideEnabledKey)
+        }
+    }
+
+    private static let centerTaskListEnabledKey = "TB.panel.centerTaskListEnabled"
+
+    /// When on, the center zone's content (the running-apps/launchers list,
+    /// plus anything else a theme puts there) is centered within the bar
+    /// instead of hugging its left edge — the bar's own background still
+    /// spans the full screen width either way, only the icons move. Off by
+    /// default, matching every theme's existing left-aligned look.
+    var centerTaskListEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(centerTaskListEnabled, forKey: Self.centerTaskListEnabledKey)
+        }
+    }
+
+    private static let centerIncludesStartButtonKey = "TB.panel.centerIncludesStartButton"
+
+    /// Only meaningful alongside `centerTaskListEnabled`: when both are on,
+    /// the start button moves out of its usual flush-left spot and becomes
+    /// the leading item of the centered group instead, so it visually
+    /// travels to the middle of the bar together with the icons rather than
+    /// staying pinned to the screen's left edge.
+    var centerIncludesStartButton: Bool {
+        didSet {
+            UserDefaults.standard.set(centerIncludesStartButton, forKey: Self.centerIncludesStartButtonKey)
+        }
+    }
+
+    private static let clockEnabledKey = "TB.clock.enabled"
+
+    /// Whether the clock module renders at all, for a theme that places one
+    /// in its layout — on by default, matching every theme's existing look.
+    var clockEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(clockEnabled, forKey: Self.clockEnabledKey)
+        }
+    }
+
+    private static let clockShowDateKey = "TB.clock.showDate"
+
+    /// Whether the date renders under the time — off by default (the
+    /// clock's existing time-only look).
+    var clockShowDate: Bool {
+        didSet {
+            UserDefaults.standard.set(clockShowDate, forKey: Self.clockShowDateKey)
+        }
+    }
+
+    private static let startMenuStyleKey = "TB.startMenu.style"
+
+    /// Which UI the start button opens — see `StartMenuStyle`.
+    var startMenuStyle: StartMenuStyle = .windows7 {
+        didSet {
+            UserDefaults.standard.set(startMenuStyle.rawValue, forKey: Self.startMenuStyleKey)
+        }
+    }
+
+    private static let infiniteScrollEnabledKey = "TB.startMenu.infiniteScroll"
+
+    /// When on, the Kickoff / Windows 7 / Windows 11 app lists loop
+    /// endlessly instead of stopping at the first and last app — see
+    /// `ThemedScrollView`.
+    var infiniteScrollEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(infiniteScrollEnabled, forKey: Self.infiniteScrollEnabledKey)
+        }
+    }
+
+    private static let windowPreviewsEnabledKey = "TB.taskbar.windowPreviews"
+
+    /// Thumbnails of a window (or a group of them) above its taskbar icon on hover — needs the Screen Recording permission.
+    var windowPreviewsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(windowPreviewsEnabled, forKey: Self.windowPreviewsEnabledKey)
+        }
+    }
+
+    private static let systemTrayEnabledKey = "TB.taskbar.systemTray"
+
+    /// Battery / Wi-Fi / volume indicators right of the clock, with a small panel on click.
+    var systemTrayEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(systemTrayEnabled, forKey: Self.systemTrayEnabledKey)
+        }
+    }
+
+    static let notificationBadgesEnabledKey = "TB.taskbar.notificationBadges"
+
+    /// Dock badges (unread mail count, etc.) on the taskbar's icons.
+    var notificationBadgesEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(notificationBadgesEnabled, forKey: Self.notificationBadgesEnabledKey)
+        }
+    }
+
+    private static let barOnAllScreensEnabledKey = "TB.taskbar.allScreens"
+
+    /// A taskbar on every screen instead of only the main one.
+    var barOnAllScreensEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(barOnAllScreensEnabled, forKey: Self.barOnAllScreensEnabledKey)
+            NotificationCenter.default.post(name: .featuresDidChange, object: nil)
+        }
+    }
+
+    private static let altTabEnabledKey = "TB.windows.altTab"
+
+    /// ⌥Tab window switcher with previews.
+    var altTabEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(altTabEnabled, forKey: Self.altTabEnabledKey)
+            NotificationCenter.default.post(name: .featuresDidChange, object: nil)
+        }
+    }
+
+    private static let windowSnapEnabledKey = "TB.windows.snap"
+
+    /// Dropping a window on a screen edge snaps it (half / maximized).
+    var windowSnapEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(windowSnapEnabled, forKey: Self.windowSnapEnabledKey)
+            NotificationCenter.default.post(name: .featuresDidChange, object: nil)
+        }
+    }
+
+    private static let groupingModeKey = "TB.taskbar.grouping"
+
+    /// See `TaskGroupingMode`.
+    var groupingMode: TaskGroupingMode {
+        didSet {
+            UserDefaults.standard.set(groupingMode.rawValue, forKey: Self.groupingModeKey)
+        }
+    }
+
+    static let quickSettingsEnabledKey = "TB.taskbar.quickSettings"
+    private static let focusShortcutNameKey = "TB.taskbar.focusShortcut"
+
+    /// Brightness, Bluetooth, dark mode, Focus and AirDrop in the
+    /// notification area's popup.
+    var quickSettingsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(quickSettingsEnabled, forKey: Self.quickSettingsEnabledKey)
+        }
+    }
+
+    /// Name of the Shortcut the popup's Focus button runs (macOS offers no
+    /// other way to switch Focus from another app).
+    var focusShortcutName: String {
+        didSet {
+            UserDefaults.standard.set(focusShortcutName, forKey: Self.focusShortcutNameKey)
+        }
+    }
+
+    private static let mediaPlayerEnabledKey = "TB.taskbar.mediaPlayer"
+
+    /// A now-playing button (Music / Spotify) with transport controls.
+    var mediaPlayerEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(mediaPlayerEnabled, forKey: Self.mediaPlayerEnabledKey)
+        }
+    }
+
+    private static let weatherEnabledKey = "TB.taskbar.weather"
+
+    /// A weather widget at the left of the bar.
+    var weatherEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(weatherEnabled, forKey: Self.weatherEnabledKey)
+        }
+    }
+
+    private static let clipboardHistoryEnabledKey = "TB.taskbar.clipboardHistory"
+
+    /// A clipboard-history button (like Win+V).
+    var clipboardHistoryEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(clipboardHistoryEnabled, forKey: Self.clipboardHistoryEnabledKey)
+        }
+    }
+
+    private static let screenshotButtonEnabledKey = "TB.taskbar.screenshotButton"
+
+    /// A screenshot button (like the Snipping Tool).
+    var screenshotButtonEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(screenshotButtonEnabled, forKey: Self.screenshotButtonEnabledKey)
+        }
+    }
+
+    private static let layoutFollowsThemeKey = "TB.layout.followsTheme"
+
+    /// Picking a theme in Settings also sets the bar height, icon size, icon
+    /// spacing and hover zoom that suit it (`ThemeTokens.preset`). On by default.
+    var layoutFollowsTheme: Bool {
+        didSet {
+            UserDefaults.standard.set(layoutFollowsTheme, forKey: Self.layoutFollowsThemeKey)
+            if layoutFollowsTheme { applyThemeLayout() }
+        }
+    }
+
+    private func applyThemeLayout() {
+        guard let tokens = activeTheme?.tokens else { return }
+        let preset = tokens.preset
+        panelHeightOverride = preset?.barHeight ?? tokens.panel.height
+        taskbarIconRatio = preset?.iconRatio ?? ThemeTokens.defaultTaskbarIconRatio
+        taskbarIconSpacingRatio = preset?.iconSpacingRatio ?? ThemeTokens.defaultTaskbarIconSpacingRatio
+        taskbarIconHoverZoomRatio = preset?.iconHoverZoom ?? ThemeTokens.defaultTaskbarIconHoverZoomRatio
+        let showNames = preset?.showNames ?? (tokens.taskButton.displayStyle == "iconAndLabel")
+        taskDisplayStyleOverride = showNames ? "iconAndLabel" : "iconOnly"
+        let centered = preset?.centered ?? false
+        centerTaskListEnabled = centered
+        centerIncludesStartButton = preset?.centerIncludesStart ?? centered
+    }
+
+    private static let startMenuFollowsThemeKey = "TB.startMenu.followsTheme"
+
+    /// Picking a theme in Settings also switches the start menu to the style
+    /// that goes with it (`ThemeManifest.startMenuStyle`).
+    var startMenuFollowsTheme: Bool {
+        didSet {
+            UserDefaults.standard.set(startMenuFollowsTheme, forKey: Self.startMenuFollowsThemeKey)
+            if startMenuFollowsTheme { applyThemeStartMenuStyle() }
+        }
+    }
+
+    private func applyThemeStartMenuStyle() {
+        if let raw = activeTheme?.manifest.startMenuStyle, let style = StartMenuStyle(rawValue: raw) {
+            startMenuStyle = style
+        }
+    }
+
+    private static let moduleOrderKey = "TB.taskbar.moduleOrder"
+    /// The buttons that sit left of the clock, in their default order — the
+    /// trash right next to the clock.
+    static let defaultModuleOrder = ["weather", "media", "clipboard", "screenshot", "tray", "trash"]
+
+    /// The user's order for those buttons (changed by dragging them in edit
+    /// mode). Anything missing from it — a button added later — goes last.
+    var moduleOrder: [String] {
+        didSet {
+            UserDefaults.standard.set(moduleOrder, forKey: Self.moduleOrderKey)
+        }
+    }
+
+    /// `ids` (the buttons currently shown) sorted into the saved order.
+    func orderedModules(_ ids: [String]) -> [String] {
+        func rank(_ id: String) -> Int { moduleOrder.firstIndex(of: id) ?? Int.max }
+        return ids.enumerated().sorted { rank($0.element) != rank($1.element) ? rank($0.element) < rank($1.element) : $0.offset < $1.offset }.map(\.element)
+    }
+
+    /// Moves `id` next to `target` in the saved order.
+    func moveModule(_ id: String, relativeTo target: String, before: Bool) {
+        guard id != target else { return }
+        var order = moduleOrder + Self.defaultModuleOrder.filter { !moduleOrder.contains($0) }
+        order.removeAll { $0 == id }
+        guard let index = order.firstIndex(of: target) else { return }
+        order.insert(id, at: before ? index : index + 1)
+        if order != moduleOrder { moduleOrder = order }
+    }
+
+    private static let weatherOnRightKey = "TB.taskbar.weatherOnRight"
+
+    /// Which end of the bar the weather widget sits at: `false` is the left
+    /// (after the start button), `true` the right (before the clock).
+    var weatherOnRight: Bool {
+        didSet {
+            UserDefaults.standard.set(weatherOnRight, forKey: Self.weatherOnRightKey)
+        }
+    }
+
+    private static let weatherCityKey = "TB.taskbar.weatherCity"
+
+    /// City the weather widget shows.
+    var weatherCity: String {
+        didSet {
+            UserDefaults.standard.set(weatherCity, forKey: Self.weatherCityKey)
+        }
+    }
+
+    private static let extraTimeZonesKey = "TB.taskbar.extraTimeZones"
+
+    /// Extra clocks (time-zone identifiers, comma-separated) under the calendar.
+    var extraTimeZones: String {
+        didSet {
+            UserDefaults.standard.set(extraTimeZones, forKey: Self.extraTimeZonesKey)
+        }
+    }
+
+    private static let startMenuTriggerModifierKey = "TB.startMenu.triggerModifier"
+
+    /// Which modifier, tapped alone, toggles the start menu —
+    /// `ShortcutsManager` reads this instead of always watching ⌘. `.none`
+    /// turns that gesture off entirely for someone who only wants
+    /// `startMenuCustomShortcut` below, or neither.
+    var startMenuTriggerModifier: StartMenuTriggerModifier = .command {
+        didSet {
+            UserDefaults.standard.set(startMenuTriggerModifier.rawValue, forKey: Self.startMenuTriggerModifierKey)
+        }
+    }
+
+    private static let startMenuShortcutKeyCodeKey = "TB.startMenu.shortcutKeyCode"
+    private static let startMenuShortcutModifiersKey = "TB.startMenu.shortcutModifiers"
+
+    /// An optional full key combination, on top of (not instead of) the
+    /// solo-modifier-tap above — `nil` means none is set. Defaults to the
+    /// existing ⌃⌥Space this app has always answered to (see
+    /// `ShortcutsManager`'s own doc comment for why that one specifically),
+    /// so upgrading doesn't silently take away a shortcut someone already
+    /// relies on; from here it's just this setting's own starting value,
+    /// freely reassignable or clearable like any other.
+    var startMenuCustomShortcut: StartMenuShortcut? = StartMenuShortcut(keyCode: 0x31, modifiers: [.control, .option]) {
+        didSet {
+            if let shortcut = startMenuCustomShortcut {
+                UserDefaults.standard.set(Int(shortcut.keyCode), forKey: Self.startMenuShortcutKeyCodeKey)
+                UserDefaults.standard.set(Int(shortcut.modifiers.rawValue), forKey: Self.startMenuShortcutModifiersKey)
+            } else {
+                // A sentinel, not `removeObject` — the key needs to stay
+                // *present* in `UserDefaults` once cleared, specifically so
+                // `init` below can tell "explicitly cleared" apart from
+                // "never configured" (both would otherwise just read back
+                // as nothing there) and not silently resurrect the shipped
+                // default the next time this app launches.
+                UserDefaults.standard.set(-1, forKey: Self.startMenuShortcutKeyCodeKey)
+            }
+        }
+    }
+
+    /// Mirrors `Localization.languageOverride` (the actual persisted,
+    /// globally-readable value — `L(...)` is called from plenty of places
+    /// that have no `ThemeStore` in reach, like `SessionManager`'s alert
+    /// text) as a genuine `@Observable` *stored* property purely so
+    /// SwiftUI re-renders when it changes. A computed pass-through to
+    /// `Localization.languageOverride` wouldn't do that: `@Observable`
+    /// only instruments real stored properties, so reading/writing through
+    /// a computed one is invisible to Observation, and nothing would tell
+    /// SwiftUI a re-render is needed. `TaskbarView`/`StartMenuView` read
+    /// this once per render (a no-op read) specifically to establish that
+    /// dependency, since none of the `L(...)` calls in their bodies touch
+    /// `ThemeStore` themselves.
+    var languageOverride: String? {
+        didSet {
+            Localization.languageOverride = languageOverride
+        }
+    }
+
+    private var watchedSource: DispatchSourceFileSystemObject?
+    private var watchedDescriptor: CInt = -1
+    private var reloadWorkItem: DispatchWorkItem?
+
+    init(preferredThemeID: String = "macos-dark") {
+        // Every fallback below (used only on a fresh install/reset, i.e. no
+        // matching UserDefaults key yet) matches whatever this app's own
+        // settings actually were at the time these defaults were last
+        // updated — not the original, more conservative shipped defaults.
+        liquidGlassEnabled = (UserDefaults.standard.object(forKey: Self.liquidGlassEnabledKey) as? Bool) ?? true
+        autoHideEnabled = UserDefaults.standard.bool(forKey: Self.autoHideEnabledKey)
+        centerTaskListEnabled = UserDefaults.standard.bool(forKey: Self.centerTaskListEnabledKey)
+        centerIncludesStartButton = UserDefaults.standard.bool(forKey: Self.centerIncludesStartButtonKey)
+        clockEnabled = (UserDefaults.standard.object(forKey: Self.clockEnabledKey) as? Bool) ?? true
+        clockShowDate = UserDefaults.standard.bool(forKey: Self.clockShowDateKey)
+        infiniteScrollEnabled = UserDefaults.standard.bool(forKey: Self.infiniteScrollEnabledKey)
+        mediaPlayerEnabled = UserDefaults.standard.bool(forKey: Self.mediaPlayerEnabledKey)
+        weatherEnabled = UserDefaults.standard.bool(forKey: Self.weatherEnabledKey)
+        clipboardHistoryEnabled = UserDefaults.standard.bool(forKey: Self.clipboardHistoryEnabledKey)
+        screenshotButtonEnabled = UserDefaults.standard.bool(forKey: Self.screenshotButtonEnabledKey)
+        // The theme-wallpaper option is gone: put back the desktop picture of anyone who had it on.
+        MainActor.assumeIsolated { WallpaperStore.restoreOriginals() }
+        UserDefaults.standard.removeObject(forKey: "TB.wallpaper.themeAware")
+        startMenuFollowsTheme = UserDefaults.standard.bool(forKey: Self.startMenuFollowsThemeKey)
+        layoutFollowsTheme = (UserDefaults.standard.object(forKey: Self.layoutFollowsThemeKey) as? Bool) ?? true
+        moduleOrder = UserDefaults.standard.stringArray(forKey: Self.moduleOrderKey) ?? Self.defaultModuleOrder
+        weatherOnRight = UserDefaults.standard.bool(forKey: Self.weatherOnRightKey)
+        weatherCity = UserDefaults.standard.string(forKey: Self.weatherCityKey) ?? ""
+        extraTimeZones = UserDefaults.standard.string(forKey: Self.extraTimeZonesKey) ?? ""
+        quickSettingsEnabled = UserDefaults.standard.bool(forKey: Self.quickSettingsEnabledKey)
+        focusShortcutName = UserDefaults.standard.string(forKey: Self.focusShortcutNameKey) ?? ""
+        groupingMode = UserDefaults.standard.string(forKey: Self.groupingModeKey).flatMap(TaskGroupingMode.init(rawValue:)) ?? .always
+        windowPreviewsEnabled = (UserDefaults.standard.object(forKey: Self.windowPreviewsEnabledKey) as? Bool) ?? true
+        systemTrayEnabled = (UserDefaults.standard.object(forKey: Self.systemTrayEnabledKey) as? Bool) ?? false
+        notificationBadgesEnabled = (UserDefaults.standard.object(forKey: Self.notificationBadgesEnabledKey) as? Bool) ?? true
+        barOnAllScreensEnabled = (UserDefaults.standard.object(forKey: Self.barOnAllScreensEnabledKey) as? Bool) ?? true
+        altTabEnabled = (UserDefaults.standard.object(forKey: Self.altTabEnabledKey) as? Bool) ?? false
+        windowSnapEnabled = (UserDefaults.standard.object(forKey: Self.windowSnapEnabledKey) as? Bool) ?? false
+        if let storedStyle = UserDefaults.standard.string(forKey: Self.startMenuStyleKey), let style = StartMenuStyle(rawValue: storedStyle) {
+            startMenuStyle = style
+        }
+        if let storedModifier = UserDefaults.standard.string(forKey: Self.startMenuTriggerModifierKey),
+           let modifier = StartMenuTriggerModifier(rawValue: storedModifier) {
+            startMenuTriggerModifier = modifier
+        }
+        if let storedKeyCode = UserDefaults.standard.object(forKey: Self.startMenuShortcutKeyCodeKey) as? Int {
+            if storedKeyCode == -1 {
+                // Explicitly cleared — see the property's own `didSet`.
+                startMenuCustomShortcut = nil
+            } else if let storedModifiers = UserDefaults.standard.object(forKey: Self.startMenuShortcutModifiersKey) as? Int {
+                startMenuCustomShortcut = StartMenuShortcut(keyCode: UInt16(storedKeyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(storedModifiers)))
+            }
+        }
+        if let storedIntensity = UserDefaults.standard.object(forKey: Self.liquidGlassIntensityKey) as? Double {
+            liquidGlassIntensity = storedIntensity
+        } else {
+            liquidGlassIntensity = 0.28150390625
+        }
+        if let storedRatio = UserDefaults.standard.object(forKey: Self.taskbarIconRatioKey) as? Double {
+            taskbarIconRatio = storedRatio
+        } else {
+            taskbarIconRatio = 0.75
+        }
+        if let storedSpacingRatio = UserDefaults.standard.object(forKey: Self.taskbarIconSpacingRatioKey) as? Double {
+            taskbarIconSpacingRatio = storedSpacingRatio
+        } else {
+            taskbarIconSpacingRatio = -0.4
+        }
+        if let storedHoverZoomRatio = UserDefaults.standard.object(forKey: Self.taskbarIconHoverZoomRatioKey) as? Double {
+            taskbarIconHoverZoomRatio = storedHoverZoomRatio
+        } else {
+            taskbarIconHoverZoomRatio = ThemeTokens.defaultTaskbarIconHoverZoomRatio
+        }
+        languageOverride = Localization.languageOverride
+        if let storedWidth = UserDefaults.standard.object(forKey: Self.startMenuWidthOverrideKey) as? Double,
+           let storedHeight = UserDefaults.standard.object(forKey: Self.startMenuHeightOverrideKey) as? Double {
+            startMenuSizeOverride = CGSize(width: storedWidth, height: storedHeight)
+        } else {
+            startMenuSizeOverride = CGSize(width: 513, height: 663)
+        }
+        if let stored = UserDefaults.standard.object(forKey: Self.heightOverrideKey) as? Double {
+            panelHeightOverride = stored
+        } else {
+            panelHeightOverride = 40
+        }
+        if let stored = UserDefaults.standard.string(forKey: Self.taskDisplayStyleOverrideKey) {
+            taskDisplayStyleOverride = stored
+        }
+        reloadThemeList()
+
+        // The pre-"family" version of this app persisted one exact theme
+        // id (e.g. "breeze-dark") under `activeThemeIDKey` — used below as
+        // a one-time migration source for whichever of the two new,
+        // independent keys isn't set yet, so an existing user's prior pick
+        // carries over as both their family *and* their initial light/dark
+        // mode, instead of silently resetting either one.
+        let legacyTheme = UserDefaults.standard.string(forKey: Self.activeThemeIDKey)
+            .flatMap { id in availableThemes.first { $0.id == id } }
+
+        if let storedFamily = UserDefaults.standard.string(forKey: Self.selectedFamilyIDKey) {
+            selectedFamilyID = storedFamily
+        } else if let legacyTheme {
+            selectedFamilyID = Self.familyID(for: legacyTheme)
+        } else if preferredThemeID.hasSuffix("-dark") {
+            selectedFamilyID = String(preferredThemeID.dropLast(5))
+        } else if preferredThemeID.hasSuffix("-light") {
+            selectedFamilyID = String(preferredThemeID.dropLast(6))
+        } else {
+            selectedFamilyID = preferredThemeID
+        }
+
+        if let storedMode = UserDefaults.standard.string(forKey: Self.colorSchemeModeKey), let mode = ColorSchemeMode(rawValue: storedMode) {
+            colorSchemeMode = mode
+        } else if let legacyTheme {
+            colorSchemeMode = legacyTheme.manifest.variant == "light" ? .light : .dark
+        }
+
+        // Direct assignments above may or may not have triggered
+        // `colorSchemeMode`'s `didSet` (it's a no-op re-resolve if the
+        // stored/migrated value happens to equal the inline default) — call
+        // this once, unconditionally, so the very first launch always ends
+        // up with a real `activeTheme` regardless.
+        resolveActiveTheme()
+        if activeTheme == nil, let first = availableThemes.first {
+            setActiveTheme(first)
+        }
+        startObservingSystemAppearance()
+    }
+
+    func reloadThemeList() {
+        // Discovery order is filesystem order (unpredictable), not
+        // alphabetical — sort by display name so the theme switcher menu
+        // lists them predictably.
+        availableThemes = ThemeLoader.loadAllThemes()
+            .sorted { $0.manifest.name.localizedStandardCompare($1.manifest.name) == .orderedAscending }
+    }
+
+    func setActiveTheme(_ theme: Theme) {
+        activeTheme = theme
+        UserDefaults.standard.set(theme.id, forKey: Self.activeThemeIDKey)
+        watchActiveThemeFolder()
+        // A theme switch can change the desired height too (each theme has
+        // its own default `panel.height`) when there's no user override.
+    }
+
+    private func watchActiveThemeFolder() {
+        stopWatching()
+        guard let folder = activeTheme?.folderURL else { return }
+
+        let fd = open(folder.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        watchedDescriptor = fd
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .rename, .delete, .extend],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleReload()
+        }
+        source.setCancelHandler { [weak self] in
+            if let fd = self?.watchedDescriptor, fd >= 0 {
+                close(fd)
+            }
+        }
+        source.resume()
+        watchedSource = source
+    }
+
+    private func scheduleReload() {
+        reloadWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.reloadActiveTheme()
+        }
+        reloadWorkItem = work
+        // Small debounce: editors often emit several write events for one save.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+    }
+
+    private func reloadActiveTheme() {
+        guard let folder = activeTheme?.folderURL else { return }
+        guard let reloaded = try? ThemeLoader.loadTheme(at: folder) else { return }
+        activeTheme = reloaded
+        watchActiveThemeFolder()
+    }
+
+    private func stopWatching() {
+        watchedSource?.cancel()
+        watchedSource = nil
+    }
+
+    deinit {
+        stopWatching()
+        if let systemAppearanceObserver {
+            DistributedNotificationCenter.default().removeObserver(systemAppearanceObserver)
+        }
+    }
+}
+
+private extension ClosedRange where Bound == CGFloat {
+    func clamp(_ value: CGFloat) -> CGFloat {
+        Swift.min(Swift.max(value, lowerBound), upperBound)
+    }
+}

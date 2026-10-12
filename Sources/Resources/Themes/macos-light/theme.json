@@ -1,0 +1,9 @@
+{
+  "id": "macos-light",
+  "name": "macOS Light",
+  "author": "Built-in",
+  "desktopEnvironment": "macOS",
+  "variant": "light",
+  "version": "1.0.0",
+  "startMenuStyle": "launchpad"
+}

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>TaskBarForMac</string>
+    <key>CFBundleDisplayName</key>
+    <string>TaskBarForMac</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.nikos.taskbarformac</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleExecutable</key>
+    <string>TaskBarForMac</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Cette application a besoin de l'accès à l'Accessibilité pour lister, activer et minimiser les fenêtres des autres applications, à la place du Dock natif.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Cette application envoie des évènements Apple à System Events (verrouiller, redémarrer, éteindre depuis le menu démarrer), au Finder (vider la corbeille) et aux lecteurs Musique ou Spotify (lecteur multimédia de la barre).</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Cette application active ou désactive le Bluetooth depuis les réglages rapides de la barre.</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>

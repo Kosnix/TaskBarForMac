@@ -1,0 +1,9 @@
+{
+  "id": "windows-vista-dark",
+  "name": "Windows Vista Dark",
+  "author": "Built-in",
+  "desktopEnvironment": "Windows",
+  "variant": "dark",
+  "version": "1.0.0",
+  "startMenuStyle": "windows7"
+}

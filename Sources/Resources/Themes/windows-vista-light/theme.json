@@ -1,0 +1,9 @@
+{
+  "id": "windows-vista-light",
+  "name": "Windows Vista Light",
+  "author": "Built-in",
+  "desktopEnvironment": "Windows",
+  "variant": "light",
+  "version": "1.0.0",
+  "startMenuStyle": "windows7"
+}

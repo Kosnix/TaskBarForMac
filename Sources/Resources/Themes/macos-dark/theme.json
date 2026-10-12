@@ -1,0 +1,9 @@
+{
+  "id": "macos-dark",
+  "name": "macOS Dark",
+  "author": "Built-in",
+  "desktopEnvironment": "macOS",
+  "variant": "dark",
+  "version": "1.0.0",
+  "startMenuStyle": "launchpad"
+}
