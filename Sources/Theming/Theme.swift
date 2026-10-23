@@ -97,6 +97,8 @@ struct TaskButtonTokens: Codable, Equatable {
     var minWidth: Double
     var maxWidth: Double
     var indicatorStyle: String
+    /// The running-indicator colour when it isn't the accent (Windows 11's blue).
+    var indicatorColor: String?
     /// "iconAndLabel" or "iconOnly" — the theme's default; overridable at
     /// runtime from the right-click menu (see `ThemeStore`).
     var displayStyle: String
@@ -334,6 +336,10 @@ extension ThemeTokens {
     /// block): its right-hand zone is lighter — small icons, tight spacing —
     /// and its clock is two equal white lines.
     var isGlassBar: Bool { panel.gradient != nil && tray == nil }
+
+    /// Windows 10/11: a bar or pill under the icon says "running" — no count
+    /// badge, no minimized dot — and a hovered button gets a rounded plate.
+    var usesIndicatorBar: Bool { taskButton.indicatorStyle == "bar" || taskButton.indicatorStyle == "pill" }
 
     /// The theme's own typeface when it names one (`typography.fontName`),
     /// else the system font. Used by the places that carry a theme's

@@ -338,7 +338,7 @@ struct Windows7StartMenuView: View {
         Rectangle().fill(fg.opacity(0.22)).frame(height: 1).padding(.vertical, 5).padding(.horizontal, 6)
     }
 
-    /// The account picture, up in the corner of the glass.
+    /// The account picture, centred on the right column.
     private var accountHeader: some View {
         HStack {
             Spacer(minLength: 0)
@@ -362,6 +362,7 @@ struct Windows7StartMenuView: View {
             }
             .buttonStyle(.plain)
             .help(L("account.open_settings"))
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .padding(.top, 12)

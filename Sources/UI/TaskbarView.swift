@@ -14,6 +14,9 @@ extension AnyTransition {
 /// to decide which modules go in the left/center/right zones, and its
 /// `tokens.json` to style them — no theme-specific code lives here.
 struct TaskbarView: View {
+    /// Shared by the two places the task group can sit (flush after the left
+    /// zone, or centred over the whole bar) so switching alignment slides it.
+    @Namespace private var alignmentNamespace
     let themeStore: ThemeStore
     let windowManager: WindowManager
     let permissions: PermissionsManager
@@ -165,6 +168,7 @@ struct TaskbarView: View {
                 HStack(spacing: tokens.spacing.itemSpacing) {
                     if hasFlushStartButton {
                         startButton(theme: theme)
+                            .matchedGeometryEffect(id: "start-button", in: alignmentNamespace)
                     }
                     // `HStack`'s `spacing` applies between *every* pair of
                     // children it's given, even one that renders as
@@ -222,6 +226,9 @@ struct TaskbarView: View {
                 }
             }
             .animation(.easeOut(duration: 0.2), value: windowManager.isEditingIcons)
+            // Changing the icons' alignment slides them to their new place.
+            .animation(.spring(response: 0.5, dampingFraction: 0.85), value: themeStore.centerTaskListEnabled)
+            .animation(.spring(response: 0.5, dampingFraction: 0.85), value: themeStore.centerIncludesStartButton)
         }
         .frame(height: tokens.panel.height)
         // Plain-style buttons (start, minimize-all, trash) still pick up
@@ -346,13 +353,19 @@ struct TaskbarView: View {
             // panel's true left edge (see `content(for:)`'s `hasFlushStartButton`).
             if includeStartButton {
                 startButton(theme: theme)
+                    .matchedGeometryEffect(id: "start-button", in: alignmentNamespace)
             }
             ForEach(modules, id: \.self) { moduleID in
-                if moduleID == "task-list" {
-                    taskList(theme: theme, availableWidth: availableWidth)
-                } else {
-                    module(moduleID, theme: theme)
+                Group {
+                    if moduleID == "task-list" {
+                        taskList(theme: theme, availableWidth: availableWidth)
+                    } else {
+                        module(moduleID, theme: theme)
+                    }
                 }
+                // The same block in either place (flush left or centred), so
+                // changing the alignment slides it across instead of fading.
+                .matchedGeometryEffect(id: "center-\(moduleID)", in: alignmentNamespace)
             }
             Spacer(minLength: 0)
         }

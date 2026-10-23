@@ -656,7 +656,7 @@ final class WindowManager {
                     bundleIdentifier: app.bundleIdentifier,
                     title: title,
                     appName: app.localizedName ?? "Application",
-                    appIcon: app.icon,
+                    appIcon: Self.icon(of: app),
                     isMinimized: minimized,
                     displayID: minimized ? nil : Self.displayID(of: axWindow)
                 ))
@@ -781,6 +781,15 @@ final class WindowManager {
             let stillPresent = Set(collected.map { $0.bundleIdentifier ?? "pid-\($0.pid)" })
             stuckCloseAttempts.formIntersection(stillPresent)
         }
+    }
+
+    /// `NSRunningApplication.icon` can stay nil for an app that was just
+    /// installed (Chrome right after its first launch): fall back to the
+    /// bundle's own icon from the workspace, then the generic app icon.
+    private static func icon(of app: NSRunningApplication) -> NSImage? {
+        if let icon = app.icon { return icon }
+        if let path = app.bundleURL?.path { return NSWorkspace.shared.icon(forFile: path) }
+        return NSWorkspace.shared.icon(for: .applicationBundle)
     }
 
     func raise(_ window: AppWindow) {

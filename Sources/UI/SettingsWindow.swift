@@ -36,7 +36,18 @@ enum SettingsWindowManager {
         // which doesn't auto-activate on its own the way a normal app
         // would when a window opens — without this, the window can appear
         // behind whatever's currently frontmost instead of gaining focus.
+        // A regular app while Settings is open, so the window — and the
+        // app's own icon — show up in the taskbar like any other app's;
+        // back to accessory once it closes.
+        NSApp.setActivationPolicy(.regular)
+        if closeObserver == nil {
+            closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: target, queue: .main) { _ in
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
         NSApp.activate(ignoringOtherApps: true)
         target.makeKeyAndOrderFront(nil)
     }
+
+    private static var closeObserver: NSObjectProtocol?
 }

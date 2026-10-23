@@ -40,7 +40,7 @@ struct TaskButtonView: View {
                     // once it's minimized is there anything worth flagging,
                     // shown as "1" in the same badge style
                     // `GroupedTaskButtonView` uses for its own window count.
-                    .taskWindowCountBadge(window.isMinimized ? .empty : nil, accentColor: Color(hex: tokens.colors.accent))
+                    .taskWindowCountBadge(window.isMinimized && tokens.taskButton.raised == nil && !tokens.usesIndicatorBar ? .empty : nil, accentColor: Color(hex: tokens.colors.accent))
                     .appNotificationBadge(window.bundleIdentifier.flatMap { AppStatusStore.shared.badges[$0] })
                     .appProgressBar(window.bundleIdentifier.flatMap { AppStatusStore.shared.progress[$0] }, accentColor: Color(hex: tokens.colors.accent))
                 }
@@ -59,12 +59,17 @@ struct TaskButtonView: View {
         // with modest content otherwise leaves empty space before the icon
         // too, not just after it).
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
+        // Behind the icon and its badges, so the line never crosses a number.
+        .background(alignment: .bottom) {
+            TaskIndicator(tokens: tokens, isActive: !window.isMinimized && windowManager.frontmostPID == window.pid, isMinimized: window.isMinimized, windowCount: 1)
+        }
         .background {
-            if let raised = tokens.taskButton.raised {
-                RaisedTaskButtonBackground(raised: raised, isActive: !window.isMinimized && windowManager.frontmostPID == window.pid, isHovered: isHovered)
+            if tokens.usesIndicatorBar {
+                TaskHoverPlate(tokens: tokens, isHovered: isHovered, isActive: !window.isMinimized && windowManager.frontmostPID == window.pid)
+            } else if let raised = tokens.taskButton.raised {
+                RaisedTaskButtonBackground(raised: raised, isActive: !window.isMinimized && windowManager.frontmostPID == window.pid, isHovered: isHovered, tint: tokens.isGlassBar ? IconTint.color(for: windowManager.resolvedIcon(bundleIdentifier: window.bundleIdentifier, fallback: window.appIcon), key: window.bundleIdentifier ?? "pid-\(window.pid)") : nil)
             }
         }
-        .overlay(activeUnderline, alignment: .bottom)
         // No more `.clipShape` here — there's no background fill left to
         // round the corners of (see `backgroundColor`'s removal above),
         // and clipping to the button's own bounds was cutting off
@@ -139,16 +144,4 @@ struct TaskButtonView: View {
     // Neither a running window nor hover get a flat background tint any
     // more — an open app reads from `activeUnderline` alone, and hover
     // reads from `.hoverLift`'s scale/shadow instead of a filled block.
-
-    /// The theme's "active tab" underline (a different indicator style from
-    /// the minimized dot) genuinely spans the whole button, not just the
-    /// icon, so it stays on the outer frame.
-    @ViewBuilder
-    private var activeUnderline: some View {
-        if !window.isMinimized && tokens.taskButton.indicatorStyle == "underline" {
-            Rectangle()
-                .fill(Color(hex: tokens.colors.accent))
-                .frame(height: 2)
-        }
-    }
 }

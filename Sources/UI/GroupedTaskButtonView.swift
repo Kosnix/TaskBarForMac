@@ -14,6 +14,10 @@ struct GroupedTaskButtonView: View {
     let showLabel: Bool
 
     private var iconSize: CGFloat { tokens.taskbarIconSize }
+    /// Windows XP's grouped button (a raised, non-glass theme showing names)
+    /// counts in text before the name; a glass bar (Windows 7) stacks sheets.
+    private var inlineCount: Bool { tokens.taskButton.raised != nil && !tokens.isGlassBar }
+    private var usesStackOrInlineCount: Bool { tokens.isGlassBar || tokens.usesIndicatorBar || (inlineCount && showLabel) }
     private var isHovered: Bool { windowManager.hoveredGroupID == bundleIdentifier }
     private var anyActive: Bool { windows.contains { !$0.isMinimized } }
     /// `bundleIdentifier` falls back to a synthetic "pid-…" key when a
@@ -37,10 +41,19 @@ struct GroupedTaskButtonView: View {
                     // 2+ windows), so there's always a meaningful count to
                     // show — same badge style `TaskButtonView` uses for its
                     // own single-minimized-window case.
-                    .taskWindowCountBadge(.count(windows.count), accentColor: Color(hex: tokens.colors.accent))
+                    .taskWindowCountBadge(usesStackOrInlineCount ? nil : .count(windows.count), accentColor: Color(hex: tokens.colors.accent))
                     .appNotificationBadge(AppStatusStore.shared.badges[bundleIdentifier])
                     .appProgressBar(AppStatusStore.shared.progress[bundleIdentifier], accentColor: Color(hex: tokens.colors.accent))
                 }
+            }
+            // Windows XP: the number of windows sits in front of the name.
+            if showLabel && inlineCount {
+                Text("\(windows.count)")
+                    .font(tokens.font(max(9, tokens.typography.fontSize - 1), weight: .bold))
+                    .foregroundStyle(Color(hex: tokens.taskButton.raised?.textColor ?? tokens.colors.textPrimary))
+                    .padding(.horizontal, 4)
+                    .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 3))
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.white.opacity(0.45), lineWidth: 0.5))
             }
             // The app's name, not a window title — a group has several.
             if showLabel {
@@ -52,6 +65,7 @@ struct GroupedTaskButtonView: View {
             }
         }
         .padding(.horizontal, tokens.effectiveTaskbarEdgePadding)
+        .padding(.trailing, tokens.isGlassBar ? 6 : 0) // room for the stacked sheets
         // Left-aligned, not the default center: when this button's
         // allocated `width` is wider than its actual content (few open
         // windows sharing a lot of available space), centering left a gap
@@ -60,12 +74,21 @@ struct GroupedTaskButtonView: View {
         // fixing the start button's own padding could touch, since it was
         // never the start button's gap to begin with.
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
+        // Behind the icon and its badges, so the line never crosses a number.
+        .background(alignment: .bottom) {
+            TaskIndicator(tokens: tokens, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid, isMinimized: !anyActive, windowCount: windows.count)
+        }
         .background {
-            if let raised = tokens.taskButton.raised {
-                RaisedTaskButtonBackground(raised: raised, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid, isHovered: isHovered)
+            if tokens.usesIndicatorBar {
+                TaskHoverPlate(tokens: tokens, isHovered: isHovered, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid)
+            } else if let raised = tokens.taskButton.raised {
+                if tokens.isGlassBar {
+                    StackedTaskButtonBackground(raised: raised, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid, isHovered: isHovered, tint: IconTint.color(for: windowManager.resolvedIcon(bundleIdentifier: realBundleIdentifier, fallback: appIcon), key: bundleIdentifier))
+                } else {
+                    RaisedTaskButtonBackground(raised: raised, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid, isHovered: isHovered)
+                }
             }
         }
-        .overlay(activeUnderline, alignment: .bottom)
         // No more `.clipShape` — see `TaskButtonView`'s identical removal.
         .contentShape(Rectangle())
         .help(windowManager.resolvedDisplayName(bundleIdentifier: realBundleIdentifier, fallback: appName))
@@ -137,15 +160,6 @@ struct GroupedTaskButtonView: View {
             if hovering, let pid = windows.first?.pid {
                 JumpListStore.shared.prefetch(bundleIdentifier: realBundleIdentifier, appURL: NSRunningApplication(processIdentifier: pid)?.bundleURL, pid: pid)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var activeUnderline: some View {
-        if anyActive && tokens.taskButton.indicatorStyle == "underline" {
-            Rectangle()
-                .fill(Color(hex: tokens.colors.accent))
-                .frame(height: 2)
         }
     }
 }

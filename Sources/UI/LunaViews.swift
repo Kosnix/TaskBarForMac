@@ -12,12 +12,18 @@ struct RaisedTaskButtonBackground: View {
     let raised: RaisedButtonTokens
     let isActive: Bool
     let isHovered: Bool
+    /// The app icon's dominant colour: Windows 7 lights a button with it
+    /// from the bottom when hovered or active. `nil` for themes without.
+    var tint: Color? = nil
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: raised.cornerRadius)
         let fill = isActive ? raised.activeFill : (isHovered ? raised.hoverFill : raised.fill)
         ZStack {
             shape.fill(fill.linear)
+            if let tint, isActive || isHovered {
+                shape.fill(RadialGradient(colors: [tint.opacity(isHovered ? 0.7 : 0.45), tint.opacity(0)], center: UnitPoint(x: 0.5, y: 1), startRadius: 0, endRadius: 30))
+            }
             if isActive {
                 shape.inset(by: 1)
                     .strokeBorder(
@@ -33,6 +39,56 @@ struct RaisedTaskButtonBackground: View {
             }
             shape.strokeBorder(Color(hex: isActive ? raised.activeBorder : raised.border), lineWidth: 1)
         }
+    }
+}
+
+/// An app with several windows on a glass bar (Windows 7): one button with
+/// two more sheets peeking out behind it on the right, instead of a count.
+struct StackedTaskButtonBackground: View {
+    let raised: RaisedButtonTokens
+    let isActive: Bool
+    let isHovered: Bool
+    var tint: Color? = nil
+    private static let step: CGFloat = 3
+
+    var body: some View {
+        ZStack {
+            RaisedTaskButtonBackground(raised: raised, isActive: false, isHovered: false)
+                .opacity(0.55)
+                .padding(.leading, Self.step * 2)
+            RaisedTaskButtonBackground(raised: raised, isActive: false, isHovered: false)
+                .opacity(0.8)
+                .padding(.leading, Self.step).padding(.trailing, Self.step)
+            RaisedTaskButtonBackground(raised: raised, isActive: isActive, isHovered: isHovered, tint: tint)
+                .padding(.trailing, Self.step * 2)
+        }
+    }
+}
+
+/// The dominant colour of an app icon (its average over the clearly
+/// coloured pixels), cached per key.
+enum IconTint {
+    private static var cache: [String: Color] = [:]
+
+    static func color(for image: NSImage?, key: String) -> Color? {
+        if let cached = cache[key] { return cached }
+        guard let image,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 12, pixelsHigh: 12, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: 12, height: 12))
+        NSGraphicsContext.restoreGraphicsState()
+        var r = 0.0, g = 0.0, b = 0.0, total = 0.0
+        for x in 0..<12 { for y in 0..<12 {
+            guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB), c.alphaComponent > 0.5 else { continue }
+            let weight = Double(c.saturationComponent) * Double(c.brightnessComponent) + 0.02
+            r += Double(c.redComponent) * weight; g += Double(c.greenComponent) * weight; b += Double(c.blueComponent) * weight; total += weight
+        } }
+        guard total > 0 else { return nil }
+        let color = Color(red: r / total, green: g / total, blue: b / total)
+        cache[key] = color
+        return color
     }
 }
 
