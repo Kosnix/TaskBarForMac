@@ -76,7 +76,7 @@ struct GroupedTaskButtonView: View {
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
         // Behind the icon and its badges, so the line never crosses a number.
         .background(alignment: .bottom) {
-            TaskIndicator(tokens: tokens, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid, isMinimized: !anyActive, windowCount: windows.count)
+            TaskIndicator(tokens: tokens, isActive: anyActive && windowManager.frontmostPID == windows.first?.pid, isMinimized: !anyActive, windowCount: windows.count, showLabel: showLabel)
         }
         .background {
             if tokens.usesIndicatorBar {

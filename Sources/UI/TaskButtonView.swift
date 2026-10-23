@@ -27,6 +27,10 @@ struct TaskButtonView: View {
     /// resized instead of staying a fixed, disproportionately small size.
     private var iconSize: CGFloat { tokens.taskbarIconSize }
 
+    private var indicator: some View {
+        TaskIndicator(tokens: tokens, isActive: !window.isMinimized && windowManager.frontmostPID == window.pid, isMinimized: window.isMinimized, windowCount: 1, showLabel: showLabel)
+    }
+
     var body: some View {
         HStack(spacing: 6) {
             if let icon = windowManager.resolvedIcon(bundleIdentifier: window.bundleIdentifier, fallback: window.appIcon) {
@@ -36,11 +40,6 @@ struct TaskButtonView: View {
                     .frame(width: iconSize, height: iconSize)
                     .wiggle(isActive: windowManager.isEditingIcons, since: windowManager.editModeChangedAt, seed: window.id.hashValue)
                     .hoverLift(isHovered: isHovered || pulse, zoomRatio: tokens.effectiveTaskbarIconHoverZoom, isPressed: windowManager.pressedIconID == window.id)
-                    // A single open window needs no indicator at all — only
-                    // once it's minimized is there anything worth flagging,
-                    // shown as "1" in the same badge style
-                    // `GroupedTaskButtonView` uses for its own window count.
-                    .taskWindowCountBadge(window.isMinimized && tokens.taskButton.raised == nil && !tokens.usesIndicatorBar ? .empty : nil, accentColor: Color(hex: tokens.colors.accent))
                     .appNotificationBadge(window.bundleIdentifier.flatMap { AppStatusStore.shared.badges[$0] })
                     .appProgressBar(window.bundleIdentifier.flatMap { AppStatusStore.shared.progress[$0] }, accentColor: Color(hex: tokens.colors.accent))
                 }
@@ -59,9 +58,10 @@ struct TaskButtonView: View {
         // with modest content otherwise leaves empty space before the icon
         // too, not just after it).
         .frame(width: width, height: tokens.panel.height - 8, alignment: .leading)
-        // Behind the icon and its badges, so the line never crosses a number.
+        // Behind the icon and its badges, so the line never crosses a number —
+        // except where it turns into the minimized dot, which sits in front.
         .background(alignment: .bottom) {
-            TaskIndicator(tokens: tokens, isActive: !window.isMinimized && windowManager.frontmostPID == window.pid, isMinimized: window.isMinimized, windowCount: 1)
+            if !TaskIndicator.morphsToDot(tokens, windowCount: 1) { indicator }
         }
         .background {
             if tokens.usesIndicatorBar {
@@ -74,6 +74,9 @@ struct TaskButtonView: View {
         // round the corners of (see `backgroundColor`'s removal above),
         // and clipping to the button's own bounds was cutting off
         // `.hoverLift`'s shadow, which needs to spill past the icon.
+        .overlay(alignment: .bottom) {
+            if TaskIndicator.morphsToDot(tokens, windowCount: 1) { indicator.allowsHitTesting(false) }
+        }
         .contentShape(Rectangle())
         .contextMenu {
             // Not while editing icons — the same reason a left-click stops

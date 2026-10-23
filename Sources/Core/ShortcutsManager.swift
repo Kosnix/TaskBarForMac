@@ -29,6 +29,7 @@ final class ShortcutsManager {
     /// macOS virtual key codes (US ANSI layout) for the keys we bind.
     private enum KeyCode {
         static let escape: UInt16 = 0x35
+        static let returnKeys: [UInt16] = [0x24, 0x4C] // Return, keypad Enter
         static let digits: [UInt16] = [0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19] // 1...9
     }
 
@@ -113,10 +114,10 @@ final class ShortcutsManager {
             }
         }
 
-        // No modifier needed — plain Escape, only while the icon-edit
+        // No modifier needed — plain Escape or Return, only while the icon-edit
         // "jiggle" mode (see `WindowManager.isEditingIcons`) is actually on,
         // so this never swallows an Escape meant for something else.
-        if event.keyCode == KeyCode.escape, windowManager.isEditingIcons {
+        if event.keyCode == KeyCode.escape || KeyCode.returnKeys.contains(event.keyCode), windowManager.isEditingIcons {
             windowManager.isEditingIcons = false
             return true
         }
