@@ -5,7 +5,7 @@
 <h1 align="center">TaskBarForMac</h1>
 
 <p align="center">
-  A KDE Plasma-style taskbar that replaces the macOS Dock.
+  A taskbar that replaces the macOS Dock.
 </p>
 
 <p align="center">
